@@ -1,0 +1,5 @@
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_ARTYA7
+	bool "artyA7 target"
+	depends on SOC_RISCV_E310ARTYA7

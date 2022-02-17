@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_ARTYA7
+
+config BOARD
+	default "artyA7"
+
+config SYS_CLOCK_TICKS_PER_SEC
+	default 128
+
+config SPI_SIFIVE
+	default y
+	
+config SERIAL_HAS_DRIVER
+    	default y
+	
+
+config UART_SIFIVE
+	bool
+	default y
+	
+
+config GPIO_SIFIVE
+	default y
+
+
+config PWM_SIFIVE
+	default y
+
+
+endif

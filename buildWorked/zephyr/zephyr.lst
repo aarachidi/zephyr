@@ -1,0 +1,5119 @@
+
+zephyr.elf:     file format elf32-littleriscv
+
+
+Disassembly of section vector:
+
+20400000 <__start>:
+SECTION_FUNC(vectors, __start)
+#if defined(CONFIG_RISCV_GP)
+	/* Initialize global pointer */
+	.option push
+	.option norelax
+	la gp, __global_pointer$
+20400000:	5fc01197          	auipc	gp,0x5fc01
+20400004:	75018193          	addi	gp,gp,1872 # 80001750 <__global_pointer$>
+
+	/*
+	 * Set mtvec (Machine Trap-Vector Base-Address Register)
+	 * to __irq_wrapper.
+	 */
+	la t0, __irq_wrapper
+20400008:	00000297          	auipc	t0,0x0
+2040000c:	01c28293          	addi	t0,t0,28 # 20400024 <__irq_wrapper>
+	csrw mtvec, t0
+20400010:	30529073          	csrw	mtvec,t0
+
+	/* Jump to __reset */
+	tail __reset
+20400014:	00c0006f          	j	20400020 <__reset>
+
+Disassembly of section reset:
+
+20400020 <__reset>:
+	/*
+	 * jump to __initialize
+	 * use call opcode in case __initialize is far away.
+	 * This will be dependent on linker.ld configuration.
+	 */
+	call __initialize
+20400020:	18d010ef          	jal	ra,204019ac <__initialize>
+
+Disassembly of section exceptions:
+
+20400024 <__irq_wrapper>:
+	 * Save caller-saved registers on current thread stack.
+	 * NOTE: need to be updated to account for floating-point registers
+	 * floating-point registers should be accounted for when corresponding
+	 * config variable is set
+	 */
+	STORE_CALLER_SAVED()
+20400024:	fb010113          	addi	sp,sp,-80
+20400028:	00112023          	sw	ra,0(sp)
+2040002c:	00412223          	sw	tp,4(sp)
+20400030:	00512423          	sw	t0,8(sp)
+20400034:	00612623          	sw	t1,12(sp)
+20400038:	00712823          	sw	t2,16(sp)
+2040003c:	01c12a23          	sw	t3,20(sp)
+20400040:	01d12c23          	sw	t4,24(sp)
+20400044:	01e12e23          	sw	t5,28(sp)
+20400048:	03f12023          	sw	t6,32(sp)
+2040004c:	02a12223          	sw	a0,36(sp)
+20400050:	02b12423          	sw	a1,40(sp)
+20400054:	02c12623          	sw	a2,44(sp)
+20400058:	02d12823          	sw	a3,48(sp)
+2040005c:	02e12a23          	sw	a4,52(sp)
+20400060:	02f12c23          	sw	a5,56(sp)
+20400064:	03012e23          	sw	a6,60(sp)
+20400068:	05112023          	sw	a7,64(sp)
+
+skip_store_fp_caller_saved:
+#endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
+
+	/* Save MEPC register */
+	csrr t0, mepc
+2040006c:	341022f3          	csrr	t0,mepc
+	RV_OP_STOREREG t0, __z_arch_esf_t_mepc_OFFSET(sp)
+20400070:	04512223          	sw	t0,68(sp)
+
+	/* Save SOC-specific MSTATUS register */
+	csrr t0, mstatus
+20400074:	300022f3          	csrr	t0,mstatus
+	RV_OP_STOREREG t0, __z_arch_esf_t_mstatus_OFFSET(sp)
+20400078:	04512423          	sw	t0,72(sp)
+	 * SOCs (like pulpino or riscv-qemu), the MSB is never set to indicate
+	 * interrupt. Hence, check for interrupt/exception via the __soc_is_irq
+	 * function (that needs to be implemented by each SOC). The result is
+	 * returned via register a0 (1: interrupt, 0 exception)
+	 */
+	jal ra, __soc_is_irq
+2040007c:	228000ef          	jal	ra,204002a4 <__soc_is_irq>
+
+	/* If a0 != 0, jump to is_interrupt */
+	addi t1, x0, 0
+20400080:	00000313          	li	t1,0
+	bnez a0, is_interrupt
+20400084:	02051e63          	bnez	a0,204000c0 <is_interrupt>
+	/*
+	 * If the exception is the result of an ECALL, check whether to
+	 * perform a context-switch or an IRQ offload. Otherwise call _Fault
+	 * to report the exception.
+	 */
+	csrr t0, mcause
+20400088:	342022f3          	csrr	t0,mcause
+	li t2, SOC_MCAUSE_EXP_MASK
+2040008c:	800003b7          	lui	t2,0x80000
+20400090:	fff38393          	addi	t2,t2,-1 # 7fffffff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000000>
+	and t0, t0, t2
+20400094:	0072f2b3          	and	t0,t0,t2
+	li t1, SOC_MCAUSE_ECALL_EXP
+20400098:	00b00313          	li	t1,11
+
+	/*
+	 * If mcause == SOC_MCAUSE_ECALL_EXP, handle system call from
+	 * kernel thread.
+	 */
+	beq t0, t1, is_kernel_syscall
+2040009c:	00628a63          	beq	t0,t1,204000b0 <is_kernel_syscall>
+	 * Stack pointer is pointing to a z_arch_esf_t structure, pass it
+	 * to _Fault (via register a0).
+	 * If _Fault shall return, set return address to
+	 * no_reschedule to restore stack.
+	 */
+	addi a0, sp, 0
+204000a0:	00010513          	mv	a0,sp
+	RV_OP_LOADREG t1, _kernel_offset_to_current(t0)
+	RV_OP_LOADREG t0, _thread_offset_to_priv_stack_start(t1)
+	RV_OP_STOREREG sp, _thread_offset_to_user_sp(t1) /* Update user SP */
+	addi sp, t0, CONFIG_PRIVILEGED_STACK_SIZE
+#else
+	la ra, no_reschedule
+204000a4:	00000097          	auipc	ra,0x0
+204000a8:	19408093          	addi	ra,ra,404 # 20400238 <no_reschedule>
+#endif /* CONFIG_USERSPACE */
+
+	tail _Fault
+204000ac:	0a10106f          	j	2040194c <_Fault>
+
+204000b0 <is_kernel_syscall>:
+	 * again upon exiting the ISR.
+	 *
+	 * It's safe to always increment by 4, even with compressed
+	 * instructions, because the ecall instruction is always 4 bytes.
+	 */
+	RV_OP_LOADREG t0, __z_arch_esf_t_mepc_OFFSET(sp)
+204000b0:	04412283          	lw	t0,68(sp)
+	addi t0, t0, 4
+204000b4:	00428293          	addi	t0,t0,4
+	RV_OP_STOREREG t0, __z_arch_esf_t_mepc_OFFSET(sp)
+204000b8:	04512223          	sw	t0,68(sp)
+	j z_riscv_user_mode_enter_syscall
+#endif /* CONFIG_USERSPACE */
+	/*
+	 * Go to reschedule to handle context-switch
+	 */
+	j reschedule
+204000bc:	0800006f          	j	2040013c <reschedule>
+
+204000c0 <is_interrupt>:
+	 * Save current thread stack pointer and switch
+	 * stack pointer to interrupt stack.
+	 */
+
+	/* Save thread stack pointer to temp register t0 */
+	addi t0, sp, 0
+204000c0:	00010293          	mv	t0,sp
+
+	/* Switch to interrupt stack */
+	la t2, _kernel
+204000c4:	5fc00397          	auipc	t2,0x5fc00
+204000c8:	06438393          	addi	t2,t2,100 # 80000128 <_kernel>
+	RV_OP_LOADREG sp, _kernel_offset_to_irq_stack(t2)
+204000cc:	0043a103          	lw	sp,4(t2)
+
+	/*
+	 * Save thread stack pointer on interrupt stack
+	 * In RISC-V, stack pointer needs to be 16-byte aligned
+	 */
+	addi sp, sp, -16
+204000d0:	ff010113          	addi	sp,sp,-16
+	RV_OP_STOREREG t0, 0x00(sp)
+204000d4:	00512023          	sw	t0,0(sp)
+
+204000d8 <on_irq_stack>:
+	la t2, _kernel
+#endif /* !CONFIG_USERSPACE && !CONFIG_PMP_STACK_GUARD */
+
+on_irq_stack:
+	/* Increment _kernel.cpus[0].nested variable */
+	lw t3, _kernel_offset_to_nested(t2)
+204000d8:	0003ae03          	lw	t3,0(t2)
+	addi t3, t3, 1
+204000dc:	001e0e13          	addi	t3,t3,1
+	sw t3, _kernel_offset_to_nested(t2)
+204000e0:	01c3a023          	sw	t3,0(t2)
+#ifdef CONFIG_TRACING_ISR
+	call sys_trace_isr_enter
+#endif
+
+	/* Get IRQ causing interrupt */
+	csrr a0, mcause
+204000e4:	34202573          	csrr	a0,mcause
+	li t0, SOC_MCAUSE_EXP_MASK
+204000e8:	800002b7          	lui	t0,0x80000
+204000ec:	fff28293          	addi	t0,t0,-1 # 7fffffff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000000>
+	and a0, a0, t0
+204000f0:	00557533          	and	a0,a0,t0
+
+	/*
+	 * Clear pending IRQ generating the interrupt at SOC level
+	 * Pass IRQ number to __soc_handle_irq via register a0
+	 */
+	jal ra, __soc_handle_irq
+204000f4:	1a0000ef          	jal	ra,20400294 <__soc_handle_irq>
+
+	/*
+	 * Call corresponding registered function in _sw_isr_table.
+	 * (table is 2-word wide, we should shift index accordingly)
+	 */
+	la t0, _sw_isr_table
+204000f8:	00003297          	auipc	t0,0x3
+204000fc:	cec28293          	addi	t0,t0,-788 # 20402de4 <_sw_isr_table>
+	slli a0, a0, (RV_REGSHIFT + 1)
+20400100:	00351513          	slli	a0,a0,0x3
+	add t0, t0, a0
+20400104:	00a282b3          	add	t0,t0,a0
+
+	/* Load argument in a0 register */
+	RV_OP_LOADREG a0, 0x00(t0)
+20400108:	0002a503          	lw	a0,0(t0)
+
+	/* Load ISR function address in register t1 */
+	RV_OP_LOADREG t1, RV_REGSIZE(t0)
+2040010c:	0042a303          	lw	t1,4(t0)
+
+	/* Call ISR function */
+	jalr ra, t1
+20400110:	000300e7          	jalr	t1
+
+20400114 <on_thread_stack>:
+
+on_thread_stack:
+	/* Get reference to _kernel */
+	la t1, _kernel
+20400114:	5fc00317          	auipc	t1,0x5fc00
+20400118:	01430313          	addi	t1,t1,20 # 80000128 <_kernel>
+
+	/* Decrement _kernel.cpus[0].nested variable */
+	lw t2, _kernel_offset_to_nested(t1)
+2040011c:	00032383          	lw	t2,0(t1)
+	addi t2, t2, -1
+20400120:	fff38393          	addi	t2,t2,-1
+	sw t2, _kernel_offset_to_nested(t1)
+20400124:	00732023          	sw	t2,0(t1)
+
+#if !defined(CONFIG_USERSPACE) && !defined(CONFIG_PMP_STACK_GUARD)
+	/* Restore thread stack pointer */
+	RV_OP_LOADREG t0, 0x00(sp)
+20400128:	00012283          	lw	t0,0(sp)
+	addi sp, t0, 0
+2040012c:	00028113          	mv	sp,t0
+	/*
+	 * Check if we need to perform a reschedule
+	 */
+
+	/* Get pointer to _kernel.current */
+	RV_OP_LOADREG t2, _kernel_offset_to_current(t1)
+20400130:	00832383          	lw	t2,8(t1)
+
+	/*
+	 * Check if next thread to schedule is current thread.
+	 * If yes do not perform a reschedule
+	 */
+	RV_OP_LOADREG t3, _kernel_offset_to_ready_q_cache(t1)
+20400134:	01832e03          	lw	t3,24(t1)
+	beq t3, t2, no_reschedule
+20400138:	107e0063          	beq	t3,t2,20400238 <no_reschedule>
+
+2040013c <reschedule>:
+	 * Note:
+	 *   Sometimes this code is execute back-to-back before the target thread
+	 *   has a chance to run. If this happens, the current thread and the
+	 *   target thread will be the same.
+	 */
+	la t0, _kernel
+2040013c:	5fc00297          	auipc	t0,0x5fc00
+20400140:	fec28293          	addi	t0,t0,-20 # 80000128 <_kernel>
+	RV_OP_LOADREG t2, _kernel_offset_to_current(t0)
+20400144:	0082a383          	lw	t2,8(t0)
+	RV_OP_LOADREG t3, _kernel_offset_to_ready_q_cache(t0)
+20400148:	0182ae03          	lw	t3,24(t0)
+	beq t2, t3, no_reschedule
+2040014c:	0fc38663          	beq	t2,t3,20400238 <no_reschedule>
+
+#if CONFIG_INSTRUMENT_THREAD_SWITCHING
+	call z_thread_mark_switched_out
+#endif
+	/* Get reference to _kernel */
+	la t0, _kernel
+20400150:	5fc00297          	auipc	t0,0x5fc00
+20400154:	fd828293          	addi	t0,t0,-40 # 80000128 <_kernel>
+
+	/* Get pointer to _kernel.current */
+	RV_OP_LOADREG t1, _kernel_offset_to_current(t0)
+20400158:	0082a303          	lw	t1,8(t0)
+
+	/*
+	 * Save callee-saved registers of current kernel thread
+	 * prior to handle context-switching
+	 */
+	STORE_CALLEE_SAVED(t1)
+2040015c:	02832a23          	sw	s0,52(t1)
+20400160:	02932c23          	sw	s1,56(t1)
+20400164:	03232e23          	sw	s2,60(t1)
+20400168:	05332023          	sw	s3,64(t1)
+2040016c:	05432223          	sw	s4,68(t1)
+20400170:	05532423          	sw	s5,72(t1)
+20400174:	05632623          	sw	s6,76(t1)
+20400178:	05732823          	sw	s7,80(t1)
+2040017c:	05832a23          	sw	s8,84(t1)
+20400180:	05932c23          	sw	s9,88(t1)
+20400184:	05a32e23          	sw	s10,92(t1)
+20400188:	07b32023          	sw	s11,96(t1)
+
+2040018c <skip_callee_saved_reg>:
+
+	/*
+	 * Save stack pointer of current thread and set the default return value
+	 * of z_swap to _k_neg_eagain for the thread.
+	 */
+	RV_OP_STOREREG sp, _thread_offset_to_sp(t1)
+2040018c:	02232823          	sw	sp,48(t1)
+	la t2, _k_neg_eagain
+20400190:	00003397          	auipc	t2,0x3
+20400194:	e5438393          	addi	t2,t2,-428 # 20402fe4 <_k_neg_eagain>
+	lw t3, 0x00(t2)
+20400198:	0003ae03          	lw	t3,0(t2)
+	sw t3, _thread_offset_to_swap_return_value(t1)
+2040019c:	07c32c23          	sw	t3,120(t1)
+
+	/* Get next thread to schedule. */
+	RV_OP_LOADREG t1, _kernel_offset_to_ready_q_cache(t0)
+204001a0:	0182a303          	lw	t1,24(t0)
+
+	/*
+	 * Set _kernel.current to new thread loaded in t1
+	 */
+	RV_OP_STOREREG t1, _kernel_offset_to_current(t0)
+204001a4:	0062a423          	sw	t1,8(t0)
+
+	/* Switch to new thread stack */
+	RV_OP_LOADREG sp, _thread_offset_to_sp(t1)
+204001a8:	03032103          	lw	sp,48(t1)
+
+	/* Restore callee-saved registers of new thread */
+	LOAD_CALLEE_SAVED(t1)
+204001ac:	03432403          	lw	s0,52(t1)
+204001b0:	03832483          	lw	s1,56(t1)
+204001b4:	03c32903          	lw	s2,60(t1)
+204001b8:	04032983          	lw	s3,64(t1)
+204001bc:	04432a03          	lw	s4,68(t1)
+204001c0:	04832a83          	lw	s5,72(t1)
+204001c4:	04c32b03          	lw	s6,76(t1)
+204001c8:	05032b83          	lw	s7,80(t1)
+204001cc:	05432c03          	lw	s8,84(t1)
+204001d0:	05832c83          	lw	s9,88(t1)
+204001d4:	05c32d03          	lw	s10,92(t1)
+204001d8:	06032d83          	lw	s11,96(t1)
+	addi a0, sp, __z_arch_esf_t_soc_context_OFFSET
+	jal ra, __soc_restore_context
+#endif /* CONFIG_RISCV_SOC_CONTEXT_SAVE */
+
+	/* Restore MEPC register */
+	RV_OP_LOADREG t0, __z_arch_esf_t_mepc_OFFSET(sp)
+204001dc:	04412283          	lw	t0,68(sp)
+	csrw mepc, t0
+204001e0:	34129073          	csrw	mepc,t0
+
+	/* Restore SOC-specific MSTATUS register */
+	RV_OP_LOADREG t0, __z_arch_esf_t_mstatus_OFFSET(sp)
+204001e4:	04812283          	lw	t0,72(sp)
+	csrw mstatus, t0
+204001e8:	30029073          	csrw	mstatus,t0
+
+skip_load_fp_caller_saved_resched:
+#endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
+
+	/* Restore caller-saved registers from thread stack */
+	LOAD_CALLER_SAVED()
+204001ec:	00012083          	lw	ra,0(sp)
+204001f0:	00412203          	lw	tp,4(sp)
+204001f4:	00812283          	lw	t0,8(sp)
+204001f8:	00c12303          	lw	t1,12(sp)
+204001fc:	01012383          	lw	t2,16(sp)
+20400200:	01412e03          	lw	t3,20(sp)
+20400204:	01812e83          	lw	t4,24(sp)
+20400208:	01c12f03          	lw	t5,28(sp)
+2040020c:	02012f83          	lw	t6,32(sp)
+20400210:	02412503          	lw	a0,36(sp)
+20400214:	02812583          	lw	a1,40(sp)
+20400218:	02c12603          	lw	a2,44(sp)
+2040021c:	03012683          	lw	a3,48(sp)
+20400220:	03412703          	lw	a4,52(sp)
+20400224:	03812783          	lw	a5,56(sp)
+20400228:	03c12803          	lw	a6,60(sp)
+2040022c:	04012883          	lw	a7,64(sp)
+20400230:	05010113          	addi	sp,sp,80
+
+	/* Call SOC_ERET to exit ISR */
+	SOC_ERET
+20400234:	30200073          	mret
+
+20400238 <no_reschedule>:
+	addi a0, sp, __z_arch_esf_t_soc_context_OFFSET
+	jal ra, __soc_restore_context
+#endif /* CONFIG_RISCV_SOC_CONTEXT_SAVE */
+
+	/* Restore MEPC register */
+	RV_OP_LOADREG t0, __z_arch_esf_t_mepc_OFFSET(sp)
+20400238:	04412283          	lw	t0,68(sp)
+	csrw mepc, t0
+2040023c:	34129073          	csrw	mepc,t0
+
+	/* Restore SOC-specific MSTATUS register */
+	RV_OP_LOADREG t0, __z_arch_esf_t_mstatus_OFFSET(sp)
+20400240:	04812283          	lw	t0,72(sp)
+	csrw mstatus, t0
+20400244:	30029073          	csrw	mstatus,t0
+
+skip_load_fp_caller_saved:
+#endif /* CONFIG_FPU && CONFIG_FPU_SHARING */
+
+	/* Restore caller-saved registers from thread stack */
+	LOAD_CALLER_SAVED()
+20400248:	00012083          	lw	ra,0(sp)
+2040024c:	00412203          	lw	tp,4(sp)
+20400250:	00812283          	lw	t0,8(sp)
+20400254:	00c12303          	lw	t1,12(sp)
+20400258:	01012383          	lw	t2,16(sp)
+2040025c:	01412e03          	lw	t3,20(sp)
+20400260:	01812e83          	lw	t4,24(sp)
+20400264:	01c12f03          	lw	t5,28(sp)
+20400268:	02012f83          	lw	t6,32(sp)
+2040026c:	02412503          	lw	a0,36(sp)
+20400270:	02812583          	lw	a1,40(sp)
+20400274:	02c12603          	lw	a2,44(sp)
+20400278:	03012683          	lw	a3,48(sp)
+2040027c:	03412703          	lw	a4,52(sp)
+20400280:	03812783          	lw	a5,56(sp)
+20400284:	03c12803          	lw	a6,60(sp)
+20400288:	04012883          	lw	a7,64(sp)
+2040028c:	05010113          	addi	sp,sp,80
+
+#ifdef CONFIG_PMP_STACK_GUARD
+	csrrw sp, mscratch, sp
+#endif /* CONFIG_PMP_STACK_GUARD */
+	/* Call SOC_ERET to exit ISR */
+	SOC_ERET
+20400290:	30200073          	mret
+
+20400294 <__soc_handle_irq>:
+ * SOC-specific function to handle pending IRQ number generating the interrupt.
+ * Exception number is given as parameter via register a0.
+ */
+SECTION_FUNC(exception.other, __soc_handle_irq)
+	/* Clear exception number from CSR mip register */
+	li t1, 1
+20400294:	00100313          	li	t1,1
+	sll t0, t1, a0
+20400298:	00a312b3          	sll	t0,t1,a0
+	csrrc t1, mip, t0
+2040029c:	3442b373          	csrrc	t1,mip,t0
+
+	/* Return */
+	jalr x0, ra
+204002a0:	00008067          	ret
+
+204002a4 <__soc_is_irq>:
+ * return 1 (interrupt) or 0 (exception)
+ *
+ */
+SECTION_FUNC(exception.other, __soc_is_irq)
+	/* Read mcause and check if interrupt bit is set */
+	csrr t0, mcause
+204002a4:	342022f3          	csrr	t0,mcause
+	li t1, SOC_MCAUSE_IRQ_MASK
+204002a8:	80000337          	lui	t1,0x80000
+	and t0, t0, t1
+204002ac:	0062f2b3          	and	t0,t0,t1
+
+	/* If interrupt bit is not set, return with 0 */
+	addi a0, x0, 0
+204002b0:	00000513          	li	a0,0
+	beqz t0, not_interrupt
+204002b4:	00028463          	beqz	t0,204002bc <not_interrupt>
+	addi a0, a0, 1
+204002b8:	00150513          	addi	a0,a0,1
+
+204002bc <not_interrupt>:
+
+not_interrupt:
+	/* return */
+	jalr x0, ra
+204002bc:	00008067          	ret
+
+204002c0 <arch_swap>:
+ * key is stored in a0 register
+ */
+SECTION_FUNC(exception.other, arch_swap)
+
+	/* Make a system call to perform context switch */
+	ecall
+204002c0:	00000073          	ecall
+	 * Prior to unlocking irq, load return value of
+	 * arch_swap to temp register t2 (from
+	 * _thread_offset_to_swap_return_value). Normally, it should be -EAGAIN,
+	 * unless someone has previously called arch_thread_return_value_set(..).
+	 */
+	la t0, _kernel
+204002c4:	5fc00297          	auipc	t0,0x5fc00
+204002c8:	e6428293          	addi	t0,t0,-412 # 80000128 <_kernel>
+
+	/* Get pointer to _kernel.current */
+	RV_OP_LOADREG t1, _kernel_offset_to_current(t0)
+204002cc:	0082a303          	lw	t1,8(t0)
+
+	/* Load return value of arch_swap function in temp register t2 */
+	lw t2, _thread_offset_to_swap_return_value(t1)
+204002d0:	07832383          	lw	t2,120(t1) # 80000078 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000079>
+
+	/*
+	 * Unlock irq, following IRQ lock state in a0 register.
+	 * Use atomic instruction csrrs to do so.
+	 */
+	andi a0, a0, MSTATUS_IEN
+204002d4:	00857513          	andi	a0,a0,8
+	csrrs t0, mstatus, a0
+204002d8:	300522f3          	csrrs	t0,mstatus,a0
+
+	/* Set value of return register a0 to value of register t2 */
+	addi a0, t2, 0
+204002dc:	00038513          	mv	a0,t2
+
+	/* Return */
+	jalr x0, ra
+204002e0:	00008067          	ret
+
+Disassembly of section text:
+
+204002e4 <__udivdi3>:
+204002e4:	00050893          	mv	a7,a0
+204002e8:	00058793          	mv	a5,a1
+204002ec:	00060813          	mv	a6,a2
+204002f0:	00068513          	mv	a0,a3
+204002f4:	00088313          	mv	t1,a7
+204002f8:	28069463          	bnez	a3,20400580 <__udivdi3+0x29c>
+204002fc:	204036b7          	lui	a3,0x20403
+20400300:	fe868693          	addi	a3,a3,-24 # 20402fe8 <__clz_tab>
+20400304:	0ec5f663          	bgeu	a1,a2,204003f0 <__udivdi3+0x10c>
+20400308:	00010737          	lui	a4,0x10
+2040030c:	0ce67863          	bgeu	a2,a4,204003dc <__udivdi3+0xf8>
+20400310:	0ff00713          	li	a4,255
+20400314:	00c73733          	sltu	a4,a4,a2
+20400318:	00371713          	slli	a4,a4,0x3
+2040031c:	00e65533          	srl	a0,a2,a4
+20400320:	00a686b3          	add	a3,a3,a0
+20400324:	0006c683          	lbu	a3,0(a3)
+20400328:	02000513          	li	a0,32
+2040032c:	00e68733          	add	a4,a3,a4
+20400330:	40e506b3          	sub	a3,a0,a4
+20400334:	00e50c63          	beq	a0,a4,2040034c <__udivdi3+0x68>
+20400338:	00d795b3          	sll	a1,a5,a3
+2040033c:	00e8d733          	srl	a4,a7,a4
+20400340:	00d61833          	sll	a6,a2,a3
+20400344:	00b765b3          	or	a1,a4,a1
+20400348:	00d89333          	sll	t1,a7,a3
+2040034c:	01085893          	srli	a7,a6,0x10
+20400350:	0315d6b3          	divu	a3,a1,a7
+20400354:	01081613          	slli	a2,a6,0x10
+20400358:	01065613          	srli	a2,a2,0x10
+2040035c:	01035793          	srli	a5,t1,0x10
+20400360:	0315f733          	remu	a4,a1,a7
+20400364:	00068513          	mv	a0,a3
+20400368:	02d605b3          	mul	a1,a2,a3
+2040036c:	01071713          	slli	a4,a4,0x10
+20400370:	00f767b3          	or	a5,a4,a5
+20400374:	00b7fe63          	bgeu	a5,a1,20400390 <__udivdi3+0xac>
+20400378:	010787b3          	add	a5,a5,a6
+2040037c:	fff68513          	addi	a0,a3,-1
+20400380:	0107e863          	bltu	a5,a6,20400390 <__udivdi3+0xac>
+20400384:	00b7f663          	bgeu	a5,a1,20400390 <__udivdi3+0xac>
+20400388:	ffe68513          	addi	a0,a3,-2
+2040038c:	010787b3          	add	a5,a5,a6
+20400390:	40b787b3          	sub	a5,a5,a1
+20400394:	0317f733          	remu	a4,a5,a7
+20400398:	01031313          	slli	t1,t1,0x10
+2040039c:	01035313          	srli	t1,t1,0x10
+204003a0:	0317d7b3          	divu	a5,a5,a7
+204003a4:	01071713          	slli	a4,a4,0x10
+204003a8:	00676333          	or	t1,a4,t1
+204003ac:	02f606b3          	mul	a3,a2,a5
+204003b0:	00078613          	mv	a2,a5
+204003b4:	00d37c63          	bgeu	t1,a3,204003cc <__udivdi3+0xe8>
+204003b8:	00680333          	add	t1,a6,t1
+204003bc:	fff78613          	addi	a2,a5,-1
+204003c0:	01036663          	bltu	t1,a6,204003cc <__udivdi3+0xe8>
+204003c4:	00d37463          	bgeu	t1,a3,204003cc <__udivdi3+0xe8>
+204003c8:	ffe78613          	addi	a2,a5,-2
+204003cc:	01051513          	slli	a0,a0,0x10
+204003d0:	00c56533          	or	a0,a0,a2
+204003d4:	00000593          	li	a1,0
+204003d8:	0e40006f          	j	204004bc <__udivdi3+0x1d8>
+204003dc:	01000537          	lui	a0,0x1000
+204003e0:	01000713          	li	a4,16
+204003e4:	f2a66ce3          	bltu	a2,a0,2040031c <__udivdi3+0x38>
+204003e8:	01800713          	li	a4,24
+204003ec:	f31ff06f          	j	2040031c <__udivdi3+0x38>
+204003f0:	00061663          	bnez	a2,204003fc <__udivdi3+0x118>
+204003f4:	00100713          	li	a4,1
+204003f8:	02c75833          	divu	a6,a4,a2
+204003fc:	00010737          	lui	a4,0x10
+20400400:	0ce87063          	bgeu	a6,a4,204004c0 <__udivdi3+0x1dc>
+20400404:	0ff00713          	li	a4,255
+20400408:	01077463          	bgeu	a4,a6,20400410 <__udivdi3+0x12c>
+2040040c:	00800513          	li	a0,8
+20400410:	00a85733          	srl	a4,a6,a0
+20400414:	00e686b3          	add	a3,a3,a4
+20400418:	0006c703          	lbu	a4,0(a3)
+2040041c:	02000613          	li	a2,32
+20400420:	00a70733          	add	a4,a4,a0
+20400424:	40e606b3          	sub	a3,a2,a4
+20400428:	0ae61663          	bne	a2,a4,204004d4 <__udivdi3+0x1f0>
+2040042c:	410787b3          	sub	a5,a5,a6
+20400430:	00100593          	li	a1,1
+20400434:	01085893          	srli	a7,a6,0x10
+20400438:	01081613          	slli	a2,a6,0x10
+2040043c:	01065613          	srli	a2,a2,0x10
+20400440:	01035713          	srli	a4,t1,0x10
+20400444:	0317f6b3          	remu	a3,a5,a7
+20400448:	0317d7b3          	divu	a5,a5,a7
+2040044c:	01069693          	slli	a3,a3,0x10
+20400450:	00e6e733          	or	a4,a3,a4
+20400454:	02f60e33          	mul	t3,a2,a5
+20400458:	00078513          	mv	a0,a5
+2040045c:	01c77e63          	bgeu	a4,t3,20400478 <__udivdi3+0x194>
+20400460:	01070733          	add	a4,a4,a6
+20400464:	fff78513          	addi	a0,a5,-1
+20400468:	01076863          	bltu	a4,a6,20400478 <__udivdi3+0x194>
+2040046c:	01c77663          	bgeu	a4,t3,20400478 <__udivdi3+0x194>
+20400470:	ffe78513          	addi	a0,a5,-2
+20400474:	01070733          	add	a4,a4,a6
+20400478:	41c70733          	sub	a4,a4,t3
+2040047c:	031777b3          	remu	a5,a4,a7
+20400480:	01031313          	slli	t1,t1,0x10
+20400484:	01035313          	srli	t1,t1,0x10
+20400488:	03175733          	divu	a4,a4,a7
+2040048c:	01079793          	slli	a5,a5,0x10
+20400490:	0067e333          	or	t1,a5,t1
+20400494:	02e606b3          	mul	a3,a2,a4
+20400498:	00070613          	mv	a2,a4
+2040049c:	00d37c63          	bgeu	t1,a3,204004b4 <__udivdi3+0x1d0>
+204004a0:	00680333          	add	t1,a6,t1
+204004a4:	fff70613          	addi	a2,a4,-1 # ffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7fff>
+204004a8:	01036663          	bltu	t1,a6,204004b4 <__udivdi3+0x1d0>
+204004ac:	00d37463          	bgeu	t1,a3,204004b4 <__udivdi3+0x1d0>
+204004b0:	ffe70613          	addi	a2,a4,-2
+204004b4:	01051513          	slli	a0,a0,0x10
+204004b8:	00c56533          	or	a0,a0,a2
+204004bc:	00008067          	ret
+204004c0:	01000737          	lui	a4,0x1000
+204004c4:	01000513          	li	a0,16
+204004c8:	f4e864e3          	bltu	a6,a4,20400410 <__udivdi3+0x12c>
+204004cc:	01800513          	li	a0,24
+204004d0:	f41ff06f          	j	20400410 <__udivdi3+0x12c>
+204004d4:	00d81833          	sll	a6,a6,a3
+204004d8:	00e7d533          	srl	a0,a5,a4
+204004dc:	00d89333          	sll	t1,a7,a3
+204004e0:	00d797b3          	sll	a5,a5,a3
+204004e4:	00e8d733          	srl	a4,a7,a4
+204004e8:	01085893          	srli	a7,a6,0x10
+204004ec:	00f76633          	or	a2,a4,a5
+204004f0:	03157733          	remu	a4,a0,a7
+204004f4:	01081793          	slli	a5,a6,0x10
+204004f8:	0107d793          	srli	a5,a5,0x10
+204004fc:	01065593          	srli	a1,a2,0x10
+20400500:	03155533          	divu	a0,a0,a7
+20400504:	01071713          	slli	a4,a4,0x10
+20400508:	00b76733          	or	a4,a4,a1
+2040050c:	02a786b3          	mul	a3,a5,a0
+20400510:	00050593          	mv	a1,a0
+20400514:	00d77e63          	bgeu	a4,a3,20400530 <__udivdi3+0x24c>
+20400518:	01070733          	add	a4,a4,a6
+2040051c:	fff50593          	addi	a1,a0,-1 # ffffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xff7fff>
+20400520:	01076863          	bltu	a4,a6,20400530 <__udivdi3+0x24c>
+20400524:	00d77663          	bgeu	a4,a3,20400530 <__udivdi3+0x24c>
+20400528:	ffe50593          	addi	a1,a0,-2
+2040052c:	01070733          	add	a4,a4,a6
+20400530:	40d706b3          	sub	a3,a4,a3
+20400534:	0316f733          	remu	a4,a3,a7
+20400538:	01061613          	slli	a2,a2,0x10
+2040053c:	01065613          	srli	a2,a2,0x10
+20400540:	0316d6b3          	divu	a3,a3,a7
+20400544:	01071713          	slli	a4,a4,0x10
+20400548:	02d78533          	mul	a0,a5,a3
+2040054c:	00c767b3          	or	a5,a4,a2
+20400550:	00068713          	mv	a4,a3
+20400554:	00a7fe63          	bgeu	a5,a0,20400570 <__udivdi3+0x28c>
+20400558:	010787b3          	add	a5,a5,a6
+2040055c:	fff68713          	addi	a4,a3,-1
+20400560:	0107e863          	bltu	a5,a6,20400570 <__udivdi3+0x28c>
+20400564:	00a7f663          	bgeu	a5,a0,20400570 <__udivdi3+0x28c>
+20400568:	ffe68713          	addi	a4,a3,-2
+2040056c:	010787b3          	add	a5,a5,a6
+20400570:	01059593          	slli	a1,a1,0x10
+20400574:	40a787b3          	sub	a5,a5,a0
+20400578:	00e5e5b3          	or	a1,a1,a4
+2040057c:	eb9ff06f          	j	20400434 <__udivdi3+0x150>
+20400580:	18d5e663          	bltu	a1,a3,2040070c <__udivdi3+0x428>
+20400584:	00010737          	lui	a4,0x10
+20400588:	04e6f463          	bgeu	a3,a4,204005d0 <__udivdi3+0x2ec>
+2040058c:	0ff00713          	li	a4,255
+20400590:	00d735b3          	sltu	a1,a4,a3
+20400594:	00359593          	slli	a1,a1,0x3
+20400598:	20403737          	lui	a4,0x20403
+2040059c:	00b6d533          	srl	a0,a3,a1
+204005a0:	fe870713          	addi	a4,a4,-24 # 20402fe8 <__clz_tab>
+204005a4:	00a70733          	add	a4,a4,a0
+204005a8:	00074703          	lbu	a4,0(a4)
+204005ac:	02000513          	li	a0,32
+204005b0:	00b70733          	add	a4,a4,a1
+204005b4:	40e505b3          	sub	a1,a0,a4
+204005b8:	02e51663          	bne	a0,a4,204005e4 <__udivdi3+0x300>
+204005bc:	00100513          	li	a0,1
+204005c0:	eef6eee3          	bltu	a3,a5,204004bc <__udivdi3+0x1d8>
+204005c4:	00c8b533          	sltu	a0,a7,a2
+204005c8:	00154513          	xori	a0,a0,1
+204005cc:	ef1ff06f          	j	204004bc <__udivdi3+0x1d8>
+204005d0:	01000737          	lui	a4,0x1000
+204005d4:	01000593          	li	a1,16
+204005d8:	fce6e0e3          	bltu	a3,a4,20400598 <__udivdi3+0x2b4>
+204005dc:	01800593          	li	a1,24
+204005e0:	fb9ff06f          	j	20400598 <__udivdi3+0x2b4>
+204005e4:	00e65833          	srl	a6,a2,a4
+204005e8:	00b696b3          	sll	a3,a3,a1
+204005ec:	00d86833          	or	a6,a6,a3
+204005f0:	00e7de33          	srl	t3,a5,a4
+204005f4:	01085e93          	srli	t4,a6,0x10
+204005f8:	03de76b3          	remu	a3,t3,t4
+204005fc:	00b797b3          	sll	a5,a5,a1
+20400600:	00e8d733          	srl	a4,a7,a4
+20400604:	00b61333          	sll	t1,a2,a1
+20400608:	00f76633          	or	a2,a4,a5
+2040060c:	01081793          	slli	a5,a6,0x10
+20400610:	0107d793          	srli	a5,a5,0x10
+20400614:	01065713          	srli	a4,a2,0x10
+20400618:	03de5e33          	divu	t3,t3,t4
+2040061c:	01069693          	slli	a3,a3,0x10
+20400620:	00e6e733          	or	a4,a3,a4
+20400624:	03c78f33          	mul	t5,a5,t3
+20400628:	000e0513          	mv	a0,t3
+2040062c:	01e77e63          	bgeu	a4,t5,20400648 <__udivdi3+0x364>
+20400630:	01070733          	add	a4,a4,a6
+20400634:	fffe0513          	addi	a0,t3,-1
+20400638:	01076863          	bltu	a4,a6,20400648 <__udivdi3+0x364>
+2040063c:	01e77663          	bgeu	a4,t5,20400648 <__udivdi3+0x364>
+20400640:	ffee0513          	addi	a0,t3,-2
+20400644:	01070733          	add	a4,a4,a6
+20400648:	41e70733          	sub	a4,a4,t5
+2040064c:	03d776b3          	remu	a3,a4,t4
+20400650:	03d75733          	divu	a4,a4,t4
+20400654:	01069693          	slli	a3,a3,0x10
+20400658:	02e78e33          	mul	t3,a5,a4
+2040065c:	01061793          	slli	a5,a2,0x10
+20400660:	0107d793          	srli	a5,a5,0x10
+20400664:	00f6e7b3          	or	a5,a3,a5
+20400668:	00070613          	mv	a2,a4
+2040066c:	01c7fe63          	bgeu	a5,t3,20400688 <__udivdi3+0x3a4>
+20400670:	010787b3          	add	a5,a5,a6
+20400674:	fff70613          	addi	a2,a4,-1 # ffffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xff7fff>
+20400678:	0107e863          	bltu	a5,a6,20400688 <__udivdi3+0x3a4>
+2040067c:	01c7f663          	bgeu	a5,t3,20400688 <__udivdi3+0x3a4>
+20400680:	ffe70613          	addi	a2,a4,-2
+20400684:	010787b3          	add	a5,a5,a6
+20400688:	01051513          	slli	a0,a0,0x10
+2040068c:	00010eb7          	lui	t4,0x10
+20400690:	00c56533          	or	a0,a0,a2
+20400694:	fffe8693          	addi	a3,t4,-1 # ffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7fff>
+20400698:	00d57833          	and	a6,a0,a3
+2040069c:	01055613          	srli	a2,a0,0x10
+204006a0:	00d376b3          	and	a3,t1,a3
+204006a4:	01035313          	srli	t1,t1,0x10
+204006a8:	41c787b3          	sub	a5,a5,t3
+204006ac:	02d80e33          	mul	t3,a6,a3
+204006b0:	02d606b3          	mul	a3,a2,a3
+204006b4:	010e5713          	srli	a4,t3,0x10
+204006b8:	02680833          	mul	a6,a6,t1
+204006bc:	00d80833          	add	a6,a6,a3
+204006c0:	01070733          	add	a4,a4,a6
+204006c4:	02660633          	mul	a2,a2,t1
+204006c8:	00d77463          	bgeu	a4,a3,204006d0 <__udivdi3+0x3ec>
+204006cc:	01d60633          	add	a2,a2,t4
+204006d0:	01075693          	srli	a3,a4,0x10
+204006d4:	00c68633          	add	a2,a3,a2
+204006d8:	02c7e663          	bltu	a5,a2,20400704 <__udivdi3+0x420>
+204006dc:	cec79ce3          	bne	a5,a2,204003d4 <__udivdi3+0xf0>
+204006e0:	000107b7          	lui	a5,0x10
+204006e4:	fff78793          	addi	a5,a5,-1 # ffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7fff>
+204006e8:	00f77733          	and	a4,a4,a5
+204006ec:	01071713          	slli	a4,a4,0x10
+204006f0:	00fe7e33          	and	t3,t3,a5
+204006f4:	00b898b3          	sll	a7,a7,a1
+204006f8:	01c70733          	add	a4,a4,t3
+204006fc:	00000593          	li	a1,0
+20400700:	dae8fee3          	bgeu	a7,a4,204004bc <__udivdi3+0x1d8>
+20400704:	fff50513          	addi	a0,a0,-1
+20400708:	ccdff06f          	j	204003d4 <__udivdi3+0xf0>
+2040070c:	00000593          	li	a1,0
+20400710:	00000513          	li	a0,0
+20400714:	da9ff06f          	j	204004bc <__udivdi3+0x1d8>
+
+20400718 <__umoddi3>:
+20400718:	00050e93          	mv	t4,a0
+2040071c:	00058313          	mv	t1,a1
+20400720:	00060813          	mv	a6,a2
+20400724:	00068793          	mv	a5,a3
+20400728:	22069a63          	bnez	a3,2040095c <__umoddi3+0x244>
+2040072c:	20403737          	lui	a4,0x20403
+20400730:	fe870713          	addi	a4,a4,-24 # 20402fe8 <__clz_tab>
+20400734:	0cc5fc63          	bgeu	a1,a2,2040080c <__umoddi3+0xf4>
+20400738:	000106b7          	lui	a3,0x10
+2040073c:	0ad67e63          	bgeu	a2,a3,204007f8 <__umoddi3+0xe0>
+20400740:	0ff00693          	li	a3,255
+20400744:	00c6f463          	bgeu	a3,a2,2040074c <__umoddi3+0x34>
+20400748:	00800793          	li	a5,8
+2040074c:	00f656b3          	srl	a3,a2,a5
+20400750:	00d70733          	add	a4,a4,a3
+20400754:	00074703          	lbu	a4,0(a4)
+20400758:	00f707b3          	add	a5,a4,a5
+2040075c:	02000713          	li	a4,32
+20400760:	40f708b3          	sub	a7,a4,a5
+20400764:	00f70c63          	beq	a4,a5,2040077c <__umoddi3+0x64>
+20400768:	011315b3          	sll	a1,t1,a7
+2040076c:	00fed7b3          	srl	a5,t4,a5
+20400770:	01161833          	sll	a6,a2,a7
+20400774:	00b7e5b3          	or	a1,a5,a1
+20400778:	011e9533          	sll	a0,t4,a7
+2040077c:	01085693          	srli	a3,a6,0x10
+20400780:	02d5f7b3          	remu	a5,a1,a3
+20400784:	01081613          	slli	a2,a6,0x10
+20400788:	01065613          	srli	a2,a2,0x10
+2040078c:	01055713          	srli	a4,a0,0x10
+20400790:	02d5d5b3          	divu	a1,a1,a3
+20400794:	01079793          	slli	a5,a5,0x10
+20400798:	00e7e733          	or	a4,a5,a4
+2040079c:	02b605b3          	mul	a1,a2,a1
+204007a0:	00b77a63          	bgeu	a4,a1,204007b4 <__umoddi3+0x9c>
+204007a4:	01070733          	add	a4,a4,a6
+204007a8:	01076663          	bltu	a4,a6,204007b4 <__umoddi3+0x9c>
+204007ac:	00b77463          	bgeu	a4,a1,204007b4 <__umoddi3+0x9c>
+204007b0:	01070733          	add	a4,a4,a6
+204007b4:	40b70733          	sub	a4,a4,a1
+204007b8:	02d777b3          	remu	a5,a4,a3
+204007bc:	01051513          	slli	a0,a0,0x10
+204007c0:	01055513          	srli	a0,a0,0x10
+204007c4:	02d75733          	divu	a4,a4,a3
+204007c8:	01079793          	slli	a5,a5,0x10
+204007cc:	00a7e533          	or	a0,a5,a0
+204007d0:	02e60733          	mul	a4,a2,a4
+204007d4:	00e57a63          	bgeu	a0,a4,204007e8 <__umoddi3+0xd0>
+204007d8:	01050533          	add	a0,a0,a6
+204007dc:	01056663          	bltu	a0,a6,204007e8 <__umoddi3+0xd0>
+204007e0:	00e57463          	bgeu	a0,a4,204007e8 <__umoddi3+0xd0>
+204007e4:	01050533          	add	a0,a0,a6
+204007e8:	40e50533          	sub	a0,a0,a4
+204007ec:	01155533          	srl	a0,a0,a7
+204007f0:	00000593          	li	a1,0
+204007f4:	00008067          	ret
+204007f8:	010006b7          	lui	a3,0x1000
+204007fc:	01000793          	li	a5,16
+20400800:	f4d666e3          	bltu	a2,a3,2040074c <__umoddi3+0x34>
+20400804:	01800793          	li	a5,24
+20400808:	f45ff06f          	j	2040074c <__umoddi3+0x34>
+2040080c:	00061663          	bnez	a2,20400818 <__umoddi3+0x100>
+20400810:	00100693          	li	a3,1
+20400814:	02c6d833          	divu	a6,a3,a2
+20400818:	000106b7          	lui	a3,0x10
+2040081c:	12d87663          	bgeu	a6,a3,20400948 <__umoddi3+0x230>
+20400820:	0ff00693          	li	a3,255
+20400824:	0106f463          	bgeu	a3,a6,2040082c <__umoddi3+0x114>
+20400828:	00800793          	li	a5,8
+2040082c:	00f856b3          	srl	a3,a6,a5
+20400830:	00d70733          	add	a4,a4,a3
+20400834:	00074603          	lbu	a2,0(a4)
+20400838:	410305b3          	sub	a1,t1,a6
+2040083c:	00f60633          	add	a2,a2,a5
+20400840:	02000793          	li	a5,32
+20400844:	40c788b3          	sub	a7,a5,a2
+20400848:	08c78663          	beq	a5,a2,204008d4 <__umoddi3+0x1bc>
+2040084c:	01181833          	sll	a6,a6,a7
+20400850:	00c357b3          	srl	a5,t1,a2
+20400854:	011315b3          	sll	a1,t1,a7
+20400858:	01085313          	srli	t1,a6,0x10
+2040085c:	00ced633          	srl	a2,t4,a2
+20400860:	00b66633          	or	a2,a2,a1
+20400864:	01081593          	slli	a1,a6,0x10
+20400868:	0105d593          	srli	a1,a1,0x10
+2040086c:	011e9533          	sll	a0,t4,a7
+20400870:	0267d6b3          	divu	a3,a5,t1
+20400874:	0267f733          	remu	a4,a5,t1
+20400878:	01065793          	srli	a5,a2,0x10
+2040087c:	02d586b3          	mul	a3,a1,a3
+20400880:	01071713          	slli	a4,a4,0x10
+20400884:	00f76733          	or	a4,a4,a5
+20400888:	00d77a63          	bgeu	a4,a3,2040089c <__umoddi3+0x184>
+2040088c:	01070733          	add	a4,a4,a6
+20400890:	01076663          	bltu	a4,a6,2040089c <__umoddi3+0x184>
+20400894:	00d77463          	bgeu	a4,a3,2040089c <__umoddi3+0x184>
+20400898:	01070733          	add	a4,a4,a6
+2040089c:	40d706b3          	sub	a3,a4,a3
+204008a0:	0266f733          	remu	a4,a3,t1
+204008a4:	01061613          	slli	a2,a2,0x10
+204008a8:	01065613          	srli	a2,a2,0x10
+204008ac:	0266d6b3          	divu	a3,a3,t1
+204008b0:	01071713          	slli	a4,a4,0x10
+204008b4:	02d586b3          	mul	a3,a1,a3
+204008b8:	00c765b3          	or	a1,a4,a2
+204008bc:	00d5fa63          	bgeu	a1,a3,204008d0 <__umoddi3+0x1b8>
+204008c0:	010585b3          	add	a1,a1,a6
+204008c4:	0105e663          	bltu	a1,a6,204008d0 <__umoddi3+0x1b8>
+204008c8:	00d5f463          	bgeu	a1,a3,204008d0 <__umoddi3+0x1b8>
+204008cc:	010585b3          	add	a1,a1,a6
+204008d0:	40d585b3          	sub	a1,a1,a3
+204008d4:	01085693          	srli	a3,a6,0x10
+204008d8:	02d5f733          	remu	a4,a1,a3
+204008dc:	01081793          	slli	a5,a6,0x10
+204008e0:	0107d793          	srli	a5,a5,0x10
+204008e4:	01055613          	srli	a2,a0,0x10
+204008e8:	02d5d5b3          	divu	a1,a1,a3
+204008ec:	01071713          	slli	a4,a4,0x10
+204008f0:	00c76733          	or	a4,a4,a2
+204008f4:	02b785b3          	mul	a1,a5,a1
+204008f8:	00b77a63          	bgeu	a4,a1,2040090c <__umoddi3+0x1f4>
+204008fc:	01070733          	add	a4,a4,a6
+20400900:	01076663          	bltu	a4,a6,2040090c <__umoddi3+0x1f4>
+20400904:	00b77463          	bgeu	a4,a1,2040090c <__umoddi3+0x1f4>
+20400908:	01070733          	add	a4,a4,a6
+2040090c:	40b705b3          	sub	a1,a4,a1
+20400910:	02d5f733          	remu	a4,a1,a3
+20400914:	01051513          	slli	a0,a0,0x10
+20400918:	01055513          	srli	a0,a0,0x10
+2040091c:	02d5d5b3          	divu	a1,a1,a3
+20400920:	02b785b3          	mul	a1,a5,a1
+20400924:	01071793          	slli	a5,a4,0x10
+20400928:	00a7e533          	or	a0,a5,a0
+2040092c:	00b57a63          	bgeu	a0,a1,20400940 <__umoddi3+0x228>
+20400930:	01050533          	add	a0,a0,a6
+20400934:	01056663          	bltu	a0,a6,20400940 <__umoddi3+0x228>
+20400938:	00b57463          	bgeu	a0,a1,20400940 <__umoddi3+0x228>
+2040093c:	01050533          	add	a0,a0,a6
+20400940:	40b50533          	sub	a0,a0,a1
+20400944:	ea9ff06f          	j	204007ec <__umoddi3+0xd4>
+20400948:	010006b7          	lui	a3,0x1000
+2040094c:	01000793          	li	a5,16
+20400950:	ecd86ee3          	bltu	a6,a3,2040082c <__umoddi3+0x114>
+20400954:	01800793          	li	a5,24
+20400958:	ed5ff06f          	j	2040082c <__umoddi3+0x114>
+2040095c:	e8d5ece3          	bltu	a1,a3,204007f4 <__umoddi3+0xdc>
+20400960:	000107b7          	lui	a5,0x10
+20400964:	04f6f863          	bgeu	a3,a5,204009b4 <__umoddi3+0x29c>
+20400968:	0ff00893          	li	a7,255
+2040096c:	00d8b7b3          	sltu	a5,a7,a3
+20400970:	00379793          	slli	a5,a5,0x3
+20400974:	20403737          	lui	a4,0x20403
+20400978:	00f6d833          	srl	a6,a3,a5
+2040097c:	fe870713          	addi	a4,a4,-24 # 20402fe8 <__clz_tab>
+20400980:	01070733          	add	a4,a4,a6
+20400984:	00074883          	lbu	a7,0(a4)
+20400988:	00f888b3          	add	a7,a7,a5
+2040098c:	02000793          	li	a5,32
+20400990:	41178833          	sub	a6,a5,a7
+20400994:	03179a63          	bne	a5,a7,204009c8 <__umoddi3+0x2b0>
+20400998:	0066e463          	bltu	a3,t1,204009a0 <__umoddi3+0x288>
+2040099c:	e4ceece3          	bltu	t4,a2,204007f4 <__umoddi3+0xdc>
+204009a0:	40ce8533          	sub	a0,t4,a2
+204009a4:	40d305b3          	sub	a1,t1,a3
+204009a8:	00aebeb3          	sltu	t4,t4,a0
+204009ac:	41d585b3          	sub	a1,a1,t4
+204009b0:	e45ff06f          	j	204007f4 <__umoddi3+0xdc>
+204009b4:	01000737          	lui	a4,0x1000
+204009b8:	01000793          	li	a5,16
+204009bc:	fae6ece3          	bltu	a3,a4,20400974 <__umoddi3+0x25c>
+204009c0:	01800793          	li	a5,24
+204009c4:	fb1ff06f          	j	20400974 <__umoddi3+0x25c>
+204009c8:	011657b3          	srl	a5,a2,a7
+204009cc:	010696b3          	sll	a3,a3,a6
+204009d0:	00d7ee33          	or	t3,a5,a3
+204009d4:	01135f33          	srl	t5,t1,a7
+204009d8:	011ed7b3          	srl	a5,t4,a7
+204009dc:	010e9533          	sll	a0,t4,a6
+204009e0:	010e5e93          	srli	t4,t3,0x10
+204009e4:	010315b3          	sll	a1,t1,a6
+204009e8:	03df5333          	divu	t1,t5,t4
+204009ec:	00b7e7b3          	or	a5,a5,a1
+204009f0:	010e1593          	slli	a1,t3,0x10
+204009f4:	0105d593          	srli	a1,a1,0x10
+204009f8:	0107d713          	srli	a4,a5,0x10
+204009fc:	01061633          	sll	a2,a2,a6
+20400a00:	03df76b3          	remu	a3,t5,t4
+20400a04:	02658f33          	mul	t5,a1,t1
+20400a08:	01069693          	slli	a3,a3,0x10
+20400a0c:	00e6e733          	or	a4,a3,a4
+20400a10:	00030693          	mv	a3,t1
+20400a14:	01e77e63          	bgeu	a4,t5,20400a30 <__umoddi3+0x318>
+20400a18:	01c70733          	add	a4,a4,t3
+20400a1c:	fff30693          	addi	a3,t1,-1
+20400a20:	01c76863          	bltu	a4,t3,20400a30 <__umoddi3+0x318>
+20400a24:	01e77663          	bgeu	a4,t5,20400a30 <__umoddi3+0x318>
+20400a28:	ffe30693          	addi	a3,t1,-2
+20400a2c:	01c70733          	add	a4,a4,t3
+20400a30:	41e70733          	sub	a4,a4,t5
+20400a34:	03d77333          	remu	t1,a4,t4
+20400a38:	01079793          	slli	a5,a5,0x10
+20400a3c:	0107d793          	srli	a5,a5,0x10
+20400a40:	03d75733          	divu	a4,a4,t4
+20400a44:	01031313          	slli	t1,t1,0x10
+20400a48:	00f36333          	or	t1,t1,a5
+20400a4c:	02e585b3          	mul	a1,a1,a4
+20400a50:	00070793          	mv	a5,a4
+20400a54:	00b37e63          	bgeu	t1,a1,20400a70 <__umoddi3+0x358>
+20400a58:	01c30333          	add	t1,t1,t3
+20400a5c:	fff70793          	addi	a5,a4,-1 # ffffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xff7fff>
+20400a60:	01c36863          	bltu	t1,t3,20400a70 <__umoddi3+0x358>
+20400a64:	00b37663          	bgeu	t1,a1,20400a70 <__umoddi3+0x358>
+20400a68:	ffe70793          	addi	a5,a4,-2
+20400a6c:	01c30333          	add	t1,t1,t3
+20400a70:	01069693          	slli	a3,a3,0x10
+20400a74:	00010f37          	lui	t5,0x10
+20400a78:	00f6e6b3          	or	a3,a3,a5
+20400a7c:	40b305b3          	sub	a1,t1,a1
+20400a80:	ffff0313          	addi	t1,t5,-1 # ffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7fff>
+20400a84:	0066feb3          	and	t4,a3,t1
+20400a88:	01065713          	srli	a4,a2,0x10
+20400a8c:	0106d693          	srli	a3,a3,0x10
+20400a90:	00667333          	and	t1,a2,t1
+20400a94:	026e87b3          	mul	a5,t4,t1
+20400a98:	02668333          	mul	t1,a3,t1
+20400a9c:	02ee8eb3          	mul	t4,t4,a4
+20400aa0:	02e686b3          	mul	a3,a3,a4
+20400aa4:	006e8eb3          	add	t4,t4,t1
+20400aa8:	0107d713          	srli	a4,a5,0x10
+20400aac:	01d70733          	add	a4,a4,t4
+20400ab0:	00677463          	bgeu	a4,t1,20400ab8 <__umoddi3+0x3a0>
+20400ab4:	01e686b3          	add	a3,a3,t5
+20400ab8:	01075313          	srli	t1,a4,0x10
+20400abc:	00d306b3          	add	a3,t1,a3
+20400ac0:	00010337          	lui	t1,0x10
+20400ac4:	fff30313          	addi	t1,t1,-1 # ffff <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7fff>
+20400ac8:	00677733          	and	a4,a4,t1
+20400acc:	01071713          	slli	a4,a4,0x10
+20400ad0:	0067f7b3          	and	a5,a5,t1
+20400ad4:	00f707b3          	add	a5,a4,a5
+20400ad8:	00d5e663          	bltu	a1,a3,20400ae4 <__umoddi3+0x3cc>
+20400adc:	00d59e63          	bne	a1,a3,20400af8 <__umoddi3+0x3e0>
+20400ae0:	00f57c63          	bgeu	a0,a5,20400af8 <__umoddi3+0x3e0>
+20400ae4:	40c78633          	sub	a2,a5,a2
+20400ae8:	00c7b7b3          	sltu	a5,a5,a2
+20400aec:	01c787b3          	add	a5,a5,t3
+20400af0:	40f686b3          	sub	a3,a3,a5
+20400af4:	00060793          	mv	a5,a2
+20400af8:	40f507b3          	sub	a5,a0,a5
+20400afc:	00f53533          	sltu	a0,a0,a5
+20400b00:	40d585b3          	sub	a1,a1,a3
+20400b04:	40a585b3          	sub	a1,a1,a0
+20400b08:	011598b3          	sll	a7,a1,a7
+20400b0c:	0107d533          	srl	a0,a5,a6
+20400b10:	00a8e533          	or	a0,a7,a0
+20400b14:	0105d5b3          	srl	a1,a1,a6
+20400b18:	cddff06f          	j	204007f4 <__umoddi3+0xdc>
+
+20400b1c <_OffsetAbsSyms>:
+ * point regs
+ */
+GEN_ABSOLUTE_SYM(_K_THREAD_NO_FLOAT_SIZEOF,
+		 STACK_ROUND_UP(sizeof(struct k_thread)));
+
+GEN_ABS_SYM_END
+20400b1c:	00008067          	ret
+
+20400b20 <main>:
+#include <zephyr.h>
+#include <sys/printk.h>
+
+void main(void)
+{
+	printk("Hello World! %s\n", CONFIG_BOARD);
+20400b20:	204035b7          	lui	a1,0x20403
+20400b24:	20403537          	lui	a0,0x20403
+20400b28:	0e858593          	addi	a1,a1,232 # 204030e8 <__clz_tab+0x100>
+20400b2c:	0f050513          	addi	a0,a0,240 # 204030f0 <__clz_tab+0x108>
+20400b30:	0540006f          	j	20400b84 <printk>
+
+20400b34 <arch_printk_char_out>:
+{
+	ARG_UNUSED(c);
+
+	/* do nothing */
+	return 0;
+}
+20400b34:	00000513          	li	a0,0
+20400b38:	00008067          	ret
+
+20400b3c <char_out>:
+
+static int char_out(int c, void *ctx_p)
+{
+	struct out_context *ctx = ctx_p;
+
+	ctx->count++;
+20400b3c:	0005a783          	lw	a5,0(a1)
+20400b40:	00178793          	addi	a5,a5,1 # 10001 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x8001>
+20400b44:	00f5a023          	sw	a5,0(a1)
+	return _char_out(c);
+20400b48:	800017b7          	lui	a5,0x80001
+20400b4c:	f507a783          	lw	a5,-176(a5) # 80000f50 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f51>
+20400b50:	00078067          	jr	a5
+
+20400b54 <vprintk>:
+#endif
+	}
+}
+#else
+void vprintk(const char *fmt, va_list ap)
+{
+20400b54:	fe010113          	addi	sp,sp,-32
+20400b58:	00050613          	mv	a2,a0
+	struct out_context ctx = { 0 };
+#ifdef CONFIG_PRINTK_SYNC
+	k_spinlock_key_t key = k_spin_lock(&lock);
+#endif
+
+	cbvprintf(char_out, &ctx, fmt, ap);
+20400b5c:	20401537          	lui	a0,0x20401
+{
+20400b60:	00058693          	mv	a3,a1
+	cbvprintf(char_out, &ctx, fmt, ap);
+20400b64:	b3c50513          	addi	a0,a0,-1220 # 20400b3c <char_out>
+20400b68:	00c10593          	addi	a1,sp,12
+{
+20400b6c:	00112e23          	sw	ra,28(sp)
+	struct out_context ctx = { 0 };
+20400b70:	00012623          	sw	zero,12(sp)
+	cbvprintf(char_out, &ctx, fmt, ap);
+20400b74:	244000ef          	jal	ra,20400db8 <cbvprintf>
+
+#ifdef CONFIG_PRINTK_SYNC
+	k_spin_unlock(&lock, key);
+#endif
+}
+20400b78:	01c12083          	lw	ra,28(sp)
+20400b7c:	02010113          	addi	sp,sp,32
+20400b80:	00008067          	ret
+
+20400b84 <printk>:
+ *
+ * @return N/A
+ */
+
+void printk(const char *fmt, ...)
+{
+20400b84:	fc010113          	addi	sp,sp,-64
+20400b88:	02b12223          	sw	a1,36(sp)
+	va_list ap;
+
+	va_start(ap, fmt);
+20400b8c:	02410593          	addi	a1,sp,36
+{
+20400b90:	00112e23          	sw	ra,28(sp)
+20400b94:	02c12423          	sw	a2,40(sp)
+20400b98:	02d12623          	sw	a3,44(sp)
+20400b9c:	02e12823          	sw	a4,48(sp)
+20400ba0:	02f12a23          	sw	a5,52(sp)
+20400ba4:	03012c23          	sw	a6,56(sp)
+20400ba8:	03112e23          	sw	a7,60(sp)
+	va_start(ap, fmt);
+20400bac:	00b12623          	sw	a1,12(sp)
+
+	if (IS_ENABLED(CONFIG_LOG_PRINTK)) {
+		log_printk(fmt, ap);
+	} else {
+		vprintk(fmt, ap);
+20400bb0:	fa5ff0ef          	jal	ra,20400b54 <vprintk>
+	}
+	va_end(ap);
+}
+20400bb4:	01c12083          	lw	ra,28(sp)
+20400bb8:	04010113          	addi	sp,sp,64
+20400bbc:	00008067          	ret
+
+20400bc0 <z_thread_entry>:
+ * This routine does not return, and is marked as such so the compiler won't
+ * generate preamble code that is only used by functions that actually return.
+ */
+FUNC_NORETURN void z_thread_entry(k_thread_entry_t entry,
+				 void *p1, void *p2, void *p3)
+{
+20400bc0:	ff010113          	addi	sp,sp,-16
+20400bc4:	00050793          	mv	a5,a0
+20400bc8:	00058513          	mv	a0,a1
+20400bcc:	00060593          	mv	a1,a2
+#ifdef CONFIG_THREAD_LOCAL_STORAGE
+	z_tls_current = z_current_get();
+#endif
+	entry(p1, p2, p3);
+20400bd0:	00068613          	mv	a2,a3
+{
+20400bd4:	00112623          	sw	ra,12(sp)
+	entry(p1, p2, p3);
+20400bd8:	000780e7          	jalr	a5
+		/* coverity[OVERRUN] */
+		return (k_tid_t) arch_syscall_invoke0(K_SYSCALL_Z_CURRENT_GET);
+	}
+#endif
+	compiler_barrier();
+	return z_impl_z_current_get();
+20400bdc:	3a9010ef          	jal	ra,20402784 <z_impl_z_current_get>
+		arch_syscall_invoke1(*(uintptr_t *)&thread, K_SYSCALL_K_THREAD_ABORT);
+		return;
+	}
+#endif
+	compiler_barrier();
+	z_impl_k_thread_abort(thread);
+20400be0:	4a5010ef          	jal	ra,20402884 <z_impl_k_thread_abort>
+
+20400be4 <encode_uint>:
+ */
+static char *encode_uint(uint_value_type value,
+			 struct conversion *conv,
+			 char *bps,
+			 const char *bpe)
+{
+20400be4:	fd010113          	addi	sp,sp,-48
+20400be8:	02812423          	sw	s0,40(sp)
+20400bec:	02912223          	sw	s1,36(sp)
+20400bf0:	03212023          	sw	s2,32(sp)
+20400bf4:	01312e23          	sw	s3,28(sp)
+20400bf8:	01712623          	sw	s7,12(sp)
+20400bfc:	01812423          	sw	s8,8(sp)
+20400c00:	01912223          	sw	s9,4(sp)
+20400c04:	02112623          	sw	ra,44(sp)
+20400c08:	01412c23          	sw	s4,24(sp)
+20400c0c:	01512a23          	sw	s5,20(sp)
+20400c10:	01612823          	sw	s6,16(sp)
+	bool upcase = isupper((int)conv->specifier);
+20400c14:	00364783          	lbu	a5,3(a2)
+{
+20400c18:	00070413          	mv	s0,a4
+	switch (specifier) {
+20400c1c:	06f00713          	li	a4,111
+{
+20400c20:	00050c13          	mv	s8,a0
+20400c24:	00058c93          	mv	s9,a1
+20400c28:	00060b93          	mv	s7,a2
+20400c2c:	00068913          	mv	s2,a3
+extern "C" {
+#endif
+
+static inline int isupper(int a)
+{
+	return (int)(((unsigned)(a)-(unsigned)'A') < 26U);
+20400c30:	fbf78993          	addi	s3,a5,-65
+	switch (specifier) {
+20400c34:	00800493          	li	s1,8
+20400c38:	00e78c63          	beq	a5,a4,20400c50 <encode_uint+0x6c>
+20400c3c:	0cf76263          	bltu	a4,a5,20400d00 <encode_uint+0x11c>
+20400c40:	05800713          	li	a4,88
+		return 10;
+20400c44:	00a00493          	li	s1,10
+	switch (specifier) {
+20400c48:	00e79463          	bne	a5,a4,20400c50 <encode_uint+0x6c>
+		return 16;
+20400c4c:	01000493          	li	s1,16
+	const unsigned int radix = conversion_radix(conv->specifier);
+	char *bp = bps + (bpe - bps);
+
+	do {
+		unsigned int lsv = (unsigned int)(value % radix);
+20400c50:	00000a93          	li	s5,0
+
+		*--bp = (lsv <= 9) ? ('0' + lsv)
+20400c54:	00900a13          	li	s4,9
+20400c58:	01900b13          	li	s6,25
+		unsigned int lsv = (unsigned int)(value % radix);
+20400c5c:	00048613          	mv	a2,s1
+20400c60:	00000693          	li	a3,0
+20400c64:	000c0513          	mv	a0,s8
+20400c68:	000c8593          	mv	a1,s9
+20400c6c:	aadff0ef          	jal	ra,20400718 <__umoddi3>
+		*--bp = (lsv <= 9) ? ('0' + lsv)
+20400c70:	0ff57793          	andi	a5,a0,255
+20400c74:	0aaa6263          	bltu	s4,a0,20400d18 <encode_uint+0x134>
+20400c78:	03078793          	addi	a5,a5,48
+20400c7c:	0ff7f793          	andi	a5,a5,255
+			: upcase ? ('A' + lsv - 10) : ('a' + lsv - 10);
+		value /= radix;
+20400c80:	00048613          	mv	a2,s1
+20400c84:	00000693          	li	a3,0
+20400c88:	000c0513          	mv	a0,s8
+20400c8c:	000c8593          	mv	a1,s9
+		*--bp = (lsv <= 9) ? ('0' + lsv)
+20400c90:	fef40fa3          	sb	a5,-1(s0)
+20400c94:	fff40413          	addi	s0,s0,-1
+		value /= radix;
+20400c98:	e4cff0ef          	jal	ra,204002e4 <__udivdi3>
+	} while ((value != 0) && (bps < bp));
+20400c9c:	019a9463          	bne	s5,s9,20400ca4 <encode_uint+0xc0>
+20400ca0:	009c6463          	bltu	s8,s1,20400ca8 <encode_uint+0xc4>
+20400ca4:	06896463          	bltu	s2,s0,20400d0c <encode_uint+0x128>
+
+	/* Record required alternate forms.  This can be determined
+	 * from the radix without re-checking specifier.
+	 */
+	if (conv->flag_hash) {
+20400ca8:	000bd783          	lhu	a5,0(s7)
+20400cac:	0207f793          	andi	a5,a5,32
+20400cb0:	00078c63          	beqz	a5,20400cc8 <encode_uint+0xe4>
+		if (radix == 8) {
+20400cb4:	00800793          	li	a5,8
+20400cb8:	06f49a63          	bne	s1,a5,20400d2c <encode_uint+0x148>
+			conv->altform_0 = true;
+20400cbc:	002bc783          	lbu	a5,2(s7)
+20400cc0:	0087e793          	ori	a5,a5,8
+		} else if (radix == 16) {
+			conv->altform_0c = true;
+20400cc4:	00fb8123          	sb	a5,2(s7)
+			;
+		}
+	}
+
+	return bp;
+}
+20400cc8:	02c12083          	lw	ra,44(sp)
+20400ccc:	00040513          	mv	a0,s0
+20400cd0:	02812403          	lw	s0,40(sp)
+20400cd4:	02412483          	lw	s1,36(sp)
+20400cd8:	02012903          	lw	s2,32(sp)
+20400cdc:	01c12983          	lw	s3,28(sp)
+20400ce0:	01812a03          	lw	s4,24(sp)
+20400ce4:	01412a83          	lw	s5,20(sp)
+20400ce8:	01012b03          	lw	s6,16(sp)
+20400cec:	00c12b83          	lw	s7,12(sp)
+20400cf0:	00812c03          	lw	s8,8(sp)
+20400cf4:	00412c83          	lw	s9,4(sp)
+20400cf8:	03010113          	addi	sp,sp,48
+20400cfc:	00008067          	ret
+	switch (specifier) {
+20400d00:	0f77f793          	andi	a5,a5,247
+20400d04:	07000713          	li	a4,112
+20400d08:	f3dff06f          	j	20400c44 <encode_uint+0x60>
+		value /= radix;
+20400d0c:	00050c13          	mv	s8,a0
+20400d10:	00058c93          	mv	s9,a1
+20400d14:	f49ff06f          	j	20400c5c <encode_uint+0x78>
+		*--bp = (lsv <= 9) ? ('0' + lsv)
+20400d18:	013b6663          	bltu	s6,s3,20400d24 <encode_uint+0x140>
+20400d1c:	03778793          	addi	a5,a5,55
+20400d20:	f5dff06f          	j	20400c7c <encode_uint+0x98>
+20400d24:	05778793          	addi	a5,a5,87
+20400d28:	f55ff06f          	j	20400c7c <encode_uint+0x98>
+		} else if (radix == 16) {
+20400d2c:	01000793          	li	a5,16
+20400d30:	f8f49ce3          	bne	s1,a5,20400cc8 <encode_uint+0xe4>
+			conv->altform_0c = true;
+20400d34:	002bc783          	lbu	a5,2(s7)
+20400d38:	0107e793          	ori	a5,a5,16
+20400d3c:	f89ff06f          	j	20400cc4 <encode_uint+0xe0>
+
+20400d40 <outs>:
+/* Outline function to emit all characters in [sp, ep). */
+static int outs(cbprintf_cb out,
+		void *ctx,
+		const char *sp,
+		const char *ep)
+{
+20400d40:	fe010113          	addi	sp,sp,-32
+20400d44:	00812c23          	sw	s0,24(sp)
+20400d48:	00912a23          	sw	s1,20(sp)
+20400d4c:	01212823          	sw	s2,16(sp)
+20400d50:	01312623          	sw	s3,12(sp)
+20400d54:	01412423          	sw	s4,8(sp)
+20400d58:	00112e23          	sw	ra,28(sp)
+20400d5c:	00050993          	mv	s3,a0
+20400d60:	00058a13          	mv	s4,a1
+20400d64:	00060493          	mv	s1,a2
+20400d68:	00068913          	mv	s2,a3
+	size_t count = 0;
+
+	while ((sp < ep) || ((ep == NULL) && *sp)) {
+20400d6c:	00060413          	mv	s0,a2
+20400d70:	40940533          	sub	a0,s0,s1
+20400d74:	01246863          	bltu	s0,s2,20400d84 <outs+0x44>
+20400d78:	02091063          	bnez	s2,20400d98 <outs+0x58>
+20400d7c:	00044783          	lbu	a5,0(s0)
+20400d80:	00078c63          	beqz	a5,20400d98 <outs+0x58>
+		int rc = out((int)*sp++, ctx);
+20400d84:	00044503          	lbu	a0,0(s0)
+20400d88:	000a0593          	mv	a1,s4
+20400d8c:	00140413          	addi	s0,s0,1
+20400d90:	000980e7          	jalr	s3
+
+		if (rc < 0) {
+20400d94:	fc055ee3          	bgez	a0,20400d70 <outs+0x30>
+		}
+		++count;
+	}
+
+	return (int)count;
+}
+20400d98:	01c12083          	lw	ra,28(sp)
+20400d9c:	01812403          	lw	s0,24(sp)
+20400da0:	01412483          	lw	s1,20(sp)
+20400da4:	01012903          	lw	s2,16(sp)
+20400da8:	00c12983          	lw	s3,12(sp)
+20400dac:	00812a03          	lw	s4,8(sp)
+20400db0:	02010113          	addi	sp,sp,32
+20400db4:	00008067          	ret
+
+20400db8 <cbvprintf>:
+
+int cbvprintf(cbprintf_cb out, void *ctx, const char *fp, va_list ap)
+{
+20400db8:	f7010113          	addi	sp,sp,-144
+20400dbc:	07512a23          	sw	s5,116(sp)
+		}
+
+		/* Do formatting, either into the buffer or
+		 * referencing external data.
+		 */
+		switch (conv->specifier) {
+20400dc0:	20403ab7          	lui	s5,0x20403
+20400dc4:	190a8793          	addi	a5,s5,400 # 20403190 <__clz_tab+0x1a8>
+{
+20400dc8:	07612823          	sw	s6,112(sp)
+	switch ((enum length_mod_enum)conv->length_mod) {
+20400dcc:	20403b37          	lui	s6,0x20403
+{
+20400dd0:	07712623          	sw	s7,108(sp)
+20400dd4:	07812423          	sw	s8,104(sp)
+		switch (conv->specifier) {
+20400dd8:	00f12223          	sw	a5,4(sp)
+				conv->specifier = 'x';
+
+				goto prec_int_pad0;
+			}
+
+			bps = "(nil)";
+20400ddc:	20403bb7          	lui	s7,0x20403
+	switch ((enum length_mod_enum)conv->length_mod) {
+20400de0:	1e8b0793          	addi	a5,s6,488 # 204031e8 <__clz_tab+0x200>
+			bpe = bps + 5;
+20400de4:	20403c37          	lui	s8,0x20403
+{
+20400de8:	09212023          	sw	s2,128(sp)
+20400dec:	07312e23          	sw	s3,124(sp)
+20400df0:	07912223          	sw	s9,100(sp)
+20400df4:	07a12023          	sw	s10,96(sp)
+20400df8:	05b12e23          	sw	s11,92(sp)
+20400dfc:	08112623          	sw	ra,140(sp)
+20400e00:	08812423          	sw	s0,136(sp)
+20400e04:	08912223          	sw	s1,132(sp)
+20400e08:	07412c23          	sw	s4,120(sp)
+20400e0c:	00050913          	mv	s2,a0
+20400e10:	00058993          	mv	s3,a1
+20400e14:	00060d13          	mv	s10,a2
+20400e18:	00068c93          	mv	s9,a3
+	size_t count = 0;
+20400e1c:	00000d93          	li	s11,0
+	switch ((enum length_mod_enum)conv->length_mod) {
+20400e20:	00f12423          	sw	a5,8(sp)
+			bps = "(nil)";
+20400e24:	104b8b93          	addi	s7,s7,260 # 20403104 <__clz_tab+0x11c>
+			bpe = bps + 5;
+20400e28:	109c0c13          	addi	s8,s8,265 # 20403109 <__clz_tab+0x121>
+	while (*fp != 0) {
+20400e2c:	000d4403          	lbu	s0,0(s10)
+20400e30:	00041663          	bnez	s0,20400e3c <cbvprintf+0x84>
+			OUTC(' ');
+			--width;
+		}
+	}
+
+	return count;
+20400e34:	000d8513          	mv	a0,s11
+20400e38:	2290006f          	j	20401860 <cbvprintf+0xaa8>
+		if (*fp != '%') {
+20400e3c:	02500793          	li	a5,37
+			OUTC(*fp++);
+20400e40:	001d0a13          	addi	s4,s10,1
+		if (*fp != '%') {
+20400e44:	02f40463          	beq	s0,a5,20400e6c <cbvprintf+0xb4>
+			OUTC(*fp++);
+20400e48:	00098593          	mv	a1,s3
+20400e4c:	00040513          	mv	a0,s0
+20400e50:	000900e7          	jalr	s2
+20400e54:	200546e3          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20400e58:	001d8d93          	addi	s11,s11,1
+			continue;
+20400e5c:	000c8413          	mv	s0,s9
+20400e60:	00040c93          	mv	s9,s0
+20400e64:	000a0d13          	mv	s10,s4
+20400e68:	fc5ff06f          	j	20400e2c <cbvprintf+0x74>
+		} state = {
+20400e6c:	02000613          	li	a2,32
+20400e70:	00000593          	li	a1,0
+20400e74:	03010513          	addi	a0,sp,48
+20400e78:	405000ef          	jal	ra,20401a7c <memset>
+	if (*sp == '%') {
+20400e7c:	001d4783          	lbu	a5,1(s10)
+20400e80:	0e879263          	bne	a5,s0,20400f64 <cbvprintf+0x1ac>
+		conv->specifier = *sp++;
+20400e84:	002d0a13          	addi	s4,s10,2
+20400e88:	04f101a3          	sb	a5,67(sp)
+		if (conv->width_star) {
+20400e8c:	04015783          	lhu	a5,64(sp)
+20400e90:	1007f713          	andi	a4,a5,256
+20400e94:	52070e63          	beqz	a4,204013d0 <cbvprintf+0x618>
+			width = va_arg(ap, int);
+20400e98:	000ca483          	lw	s1,0(s9)
+20400e9c:	004c8413          	addi	s0,s9,4
+			if (width < 0) {
+20400ea0:	0004d863          	bgez	s1,20400eb0 <cbvprintf+0xf8>
+				conv->flag_dash = true;
+20400ea4:	0047e793          	ori	a5,a5,4
+20400ea8:	04f11023          	sh	a5,64(sp)
+				width = -width;
+20400eac:	409004b3          	neg	s1,s1
+		if (conv->prec_star) {
+20400eb0:	04015703          	lhu	a4,64(sp)
+20400eb4:	40077793          	andi	a5,a4,1024
+20400eb8:	52078c63          	beqz	a5,204013f0 <cbvprintf+0x638>
+			int arg = va_arg(ap, int);
+20400ebc:	00042a83          	lw	s5,0(s0)
+20400ec0:	00440413          	addi	s0,s0,4
+			if (arg < 0) {
+20400ec4:	000ad863          	bgez	s5,20400ed4 <cbvprintf+0x11c>
+				conv->prec_present = false;
+20400ec8:	dff77713          	andi	a4,a4,-513
+20400ecc:	04e11023          	sh	a4,64(sp)
+		int precision = -1;
+20400ed0:	fff00a93          	li	s5,-1
+			= (enum specifier_cat_enum)conv->specifier_cat;
+20400ed4:	04012583          	lw	a1,64(sp)
+		conv->pad0_value = 0;
+20400ed8:	04012223          	sw	zero,68(sp)
+		conv->pad0_pre_exp = 0;
+20400edc:	04012423          	sw	zero,72(sp)
+			= (enum specifier_cat_enum)conv->specifier_cat;
+20400ee0:	0105d693          	srli	a3,a1,0x10
+			= (enum length_mod_enum)conv->length_mod;
+20400ee4:	00b5d713          	srli	a4,a1,0xb
+		enum specifier_cat_enum specifier_cat
+20400ee8:	0076f693          	andi	a3,a3,7
+		if (specifier_cat == SPECIFIER_SINT) {
+20400eec:	00100613          	li	a2,1
+			= (enum length_mod_enum)conv->length_mod;
+20400ef0:	00f77713          	andi	a4,a4,15
+		if (specifier_cat == SPECIFIER_SINT) {
+20400ef4:	56c69263          	bne	a3,a2,20401458 <cbvprintf+0x6a0>
+			switch (length_mod) {
+20400ef8:	00500613          	li	a2,5
+20400efc:	50c70e63          	beq	a4,a2,20401418 <cbvprintf+0x660>
+20400f00:	00e66a63          	bltu	a2,a4,20400f14 <cbvprintf+0x15c>
+20400f04:	00300693          	li	a3,3
+20400f08:	4ed70e63          	beq	a4,a3,20401404 <cbvprintf+0x64c>
+20400f0c:	00400693          	li	a3,4
+20400f10:	50d70463          	beq	a4,a3,20401418 <cbvprintf+0x660>
+					(sint_value_type)va_arg(ap, ptrdiff_t);
+20400f14:	00042683          	lw	a3,0(s0)
+20400f18:	00440413          	addi	s0,s0,4
+20400f1c:	02d12823          	sw	a3,48(sp)
+20400f20:	41f6d693          	srai	a3,a3,0x1f
+20400f24:	02d12a23          	sw	a3,52(sp)
+			if (length_mod == LENGTH_HH) {
+20400f28:	00100693          	li	a3,1
+20400f2c:	50d71863          	bne	a4,a3,2040143c <cbvprintf+0x684>
+				value->uint = (unsigned char)value->uint;
+20400f30:	03014683          	lbu	a3,48(sp)
+				value->uint = (unsigned short)value->uint;
+20400f34:	02d12823          	sw	a3,48(sp)
+20400f38:	02012a23          	sw	zero,52(sp)
+		if (conv->invalid || conv->unsupported) {
+20400f3c:	0035f593          	andi	a1,a1,3
+20400f40:	5e058863          	beqz	a1,20401530 <cbvprintf+0x778>
+			OUTS(sp, fp);
+20400f44:	000a0693          	mv	a3,s4
+20400f48:	000d0613          	mv	a2,s10
+20400f4c:	00098593          	mv	a1,s3
+20400f50:	00090513          	mv	a0,s2
+20400f54:	dedff0ef          	jal	ra,20400d40 <outs>
+20400f58:	100544e3          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20400f5c:	00ad8db3          	add	s11,s11,a0
+			continue;
+20400f60:	f01ff06f          	j	20400e60 <cbvprintf+0xa8>
+20400f64:	00000513          	li	a0,0
+20400f68:	00000693          	li	a3,0
+20400f6c:	00000593          	li	a1,0
+20400f70:	00000613          	li	a2,0
+20400f74:	00000713          	li	a4,0
+		switch (*sp) {
+20400f78:	02b00813          	li	a6,43
+20400f7c:	02d00893          	li	a7,45
+20400f80:	03000313          	li	t1,48
+20400f84:	02000e13          	li	t3,32
+20400f88:	02300e93          	li	t4,35
+20400f8c:	000a4783          	lbu	a5,0(s4)
+20400f90:	13078863          	beq	a5,a6,204010c0 <cbvprintf+0x308>
+20400f94:	10f86e63          	bltu	a6,a5,204010b0 <cbvprintf+0x2f8>
+20400f98:	13c78a63          	beq	a5,t3,204010cc <cbvprintf+0x314>
+20400f9c:	13d78c63          	beq	a5,t4,204010d4 <cbvprintf+0x31c>
+20400fa0:	00070863          	beqz	a4,20400fb0 <cbvprintf+0x1f8>
+20400fa4:	04015703          	lhu	a4,64(sp)
+20400fa8:	00476713          	ori	a4,a4,4
+20400fac:	04e11023          	sh	a4,64(sp)
+20400fb0:	00060863          	beqz	a2,20400fc0 <cbvprintf+0x208>
+20400fb4:	04015703          	lhu	a4,64(sp)
+20400fb8:	00876713          	ori	a4,a4,8
+20400fbc:	04e11023          	sh	a4,64(sp)
+20400fc0:	00058863          	beqz	a1,20400fd0 <cbvprintf+0x218>
+20400fc4:	04015703          	lhu	a4,64(sp)
+20400fc8:	01076713          	ori	a4,a4,16
+20400fcc:	04e11023          	sh	a4,64(sp)
+20400fd0:	00068863          	beqz	a3,20400fe0 <cbvprintf+0x228>
+20400fd4:	04015703          	lhu	a4,64(sp)
+20400fd8:	02076713          	ori	a4,a4,32
+20400fdc:	04e11023          	sh	a4,64(sp)
+20400fe0:	00050863          	beqz	a0,20400ff0 <cbvprintf+0x238>
+20400fe4:	04015703          	lhu	a4,64(sp)
+20400fe8:	04076713          	ori	a4,a4,64
+20400fec:	04e11023          	sh	a4,64(sp)
+	if (conv->flag_zero && conv->flag_dash) {
+20400ff0:	04012703          	lw	a4,64(sp)
+20400ff4:	04400693          	li	a3,68
+20400ff8:	04477713          	andi	a4,a4,68
+20400ffc:	00d71863          	bne	a4,a3,2040100c <cbvprintf+0x254>
+		conv->flag_zero = false;
+20401000:	04015703          	lhu	a4,64(sp)
+20401004:	fbf77713          	andi	a4,a4,-65
+20401008:	04e11023          	sh	a4,64(sp)
+	conv->width_present = true;
+2040100c:	04015703          	lhu	a4,64(sp)
+20401010:	08076693          	ori	a3,a4,128
+20401014:	04d11023          	sh	a3,64(sp)
+	if (*sp == '*') {
+20401018:	02a00693          	li	a3,42
+2040101c:	10d79463          	bne	a5,a3,20401124 <cbvprintf+0x36c>
+			++sp;
+20401020:	001a0793          	addi	a5,s4,1
+		conv->width_star = true;
+20401024:	18076713          	ori	a4,a4,384
+		conv->unsupported |= ((conv->width_value < 0)
+20401028:	04e11023          	sh	a4,64(sp)
+	conv->prec_present = (*sp == '.');
+2040102c:	0007c603          	lbu	a2,0(a5)
+20401030:	fd260713          	addi	a4,a2,-46
+20401034:	00173713          	seqz	a4,a4
+20401038:	00971693          	slli	a3,a4,0x9
+2040103c:	04015703          	lhu	a4,64(sp)
+20401040:	dff77713          	andi	a4,a4,-513
+20401044:	00d76733          	or	a4,a4,a3
+20401048:	04e11023          	sh	a4,64(sp)
+	if (!conv->prec_present) {
+2040104c:	02e00693          	li	a3,46
+20401050:	0ed61a63          	bne	a2,a3,20401144 <cbvprintf+0x38c>
+	if (*sp == '*') {
+20401054:	0017c603          	lbu	a2,1(a5)
+20401058:	02a00693          	li	a3,42
+2040105c:	0cd60e63          	beq	a2,a3,20401138 <cbvprintf+0x380>
+	++sp;
+20401060:	00178793          	addi	a5,a5,1
+	size_t val = 0;
+20401064:	00000713          	li	a4,0
+	while (isdigit((int)(unsigned char)*sp)) {
+20401068:	00900613          	li	a2,9
+		val = 10U * val + *sp++ - '0';
+2040106c:	00a00813          	li	a6,10
+			(((unsigned)c) <= (unsigned)'~'));
+}
+
+static inline int isdigit(int a)
+{
+	return (int)(((unsigned)(a)-(unsigned)'0') < 10U);
+20401070:	0007c683          	lbu	a3,0(a5)
+20401074:	00178513          	addi	a0,a5,1
+20401078:	fd068593          	addi	a1,a3,-48 # ffffd0 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xff7fd0>
+	while (isdigit((int)(unsigned char)*sp)) {
+2040107c:	16b67463          	bgeu	a2,a1,204011e4 <cbvprintf+0x42c>
+	conv->unsupported |= ((conv->prec_value < 0)
+20401080:	04012683          	lw	a3,64(sp)
+	conv->prec_value = prec;
+20401084:	04e12423          	sw	a4,72(sp)
+			      || (prec != (size_t)conv->prec_value));
+20401088:	01f75713          	srli	a4,a4,0x1f
+	conv->unsupported |= ((conv->prec_value < 0)
+2040108c:	0016d693          	srli	a3,a3,0x1
+20401090:	0016f693          	andi	a3,a3,1
+20401094:	00e6e733          	or	a4,a3,a4
+20401098:	04015683          	lhu	a3,64(sp)
+2040109c:	00171713          	slli	a4,a4,0x1
+204010a0:	ffd6f693          	andi	a3,a3,-3
+204010a4:	00e6e733          	or	a4,a3,a4
+204010a8:	04e11023          	sh	a4,64(sp)
+	return sp;
+204010ac:	0980006f          	j	20401144 <cbvprintf+0x38c>
+		switch (*sp) {
+204010b0:	03178663          	beq	a5,a7,204010dc <cbvprintf+0x324>
+204010b4:	ee6796e3          	bne	a5,t1,20400fa0 <cbvprintf+0x1e8>
+			conv->flag_zero = true;
+204010b8:	00100513          	li	a0,1
+204010bc:	0080006f          	j	204010c4 <cbvprintf+0x30c>
+			conv->flag_plus = true;
+204010c0:	00100613          	li	a2,1
+			++sp;
+204010c4:	001a0a13          	addi	s4,s4,1
+	} while (loop);
+204010c8:	ec5ff06f          	j	20400f8c <cbvprintf+0x1d4>
+			conv->flag_space = true;
+204010cc:	00100593          	li	a1,1
+204010d0:	ff5ff06f          	j	204010c4 <cbvprintf+0x30c>
+			conv->flag_hash = true;
+204010d4:	00100693          	li	a3,1
+204010d8:	fedff06f          	j	204010c4 <cbvprintf+0x30c>
+		switch (*sp) {
+204010dc:	00100713          	li	a4,1
+204010e0:	fe5ff06f          	j	204010c4 <cbvprintf+0x30c>
+		val = 10U * val + *sp++ - '0';
+204010e4:	03070733          	mul	a4,a4,a6
+204010e8:	00050793          	mv	a5,a0
+204010ec:	fd070713          	addi	a4,a4,-48
+204010f0:	00d70733          	add	a4,a4,a3
+204010f4:	0007c683          	lbu	a3,0(a5)
+204010f8:	00178513          	addi	a0,a5,1
+204010fc:	fd068593          	addi	a1,a3,-48
+	while (isdigit((int)(unsigned char)*sp)) {
+20401100:	feb672e3          	bgeu	a2,a1,204010e4 <cbvprintf+0x32c>
+	if (sp != wp) {
+20401104:	f2fa04e3          	beq	s4,a5,2040102c <cbvprintf+0x274>
+		conv->unsupported |= ((conv->width_value < 0)
+20401108:	04015683          	lhu	a3,64(sp)
+		conv->width_value = width;
+2040110c:	04e12223          	sw	a4,68(sp)
+		conv->unsupported |= ((conv->width_value < 0)
+20401110:	01f75713          	srli	a4,a4,0x1f
+20401114:	00171713          	slli	a4,a4,0x1
+20401118:	ffd6f693          	andi	a3,a3,-3
+2040111c:	00e6e733          	or	a4,a3,a4
+20401120:	f09ff06f          	j	20401028 <cbvprintf+0x270>
+20401124:	000a0793          	mv	a5,s4
+	size_t val = 0;
+20401128:	00000713          	li	a4,0
+	while (isdigit((int)(unsigned char)*sp)) {
+2040112c:	00900613          	li	a2,9
+		val = 10U * val + *sp++ - '0';
+20401130:	00a00813          	li	a6,10
+20401134:	fc1ff06f          	j	204010f4 <cbvprintf+0x33c>
+		conv->prec_star = true;
+20401138:	40076713          	ori	a4,a4,1024
+2040113c:	04e11023          	sh	a4,64(sp)
+		return ++sp;
+20401140:	00278793          	addi	a5,a5,2
+	switch (*sp) {
+20401144:	0007c603          	lbu	a2,0(a5)
+20401148:	06c00713          	li	a4,108
+		if (*++sp == 'h') {
+2040114c:	00178593          	addi	a1,a5,1
+	switch (*sp) {
+20401150:	10e60c63          	beq	a2,a4,20401268 <cbvprintf+0x4b0>
+20401154:	0ac76263          	bltu	a4,a2,204011f8 <cbvprintf+0x440>
+20401158:	06800713          	li	a4,104
+2040115c:	0ce60663          	beq	a2,a4,20401228 <cbvprintf+0x470>
+20401160:	06a00713          	li	a4,106
+20401164:	12e60863          	beq	a2,a4,20401294 <cbvprintf+0x4dc>
+20401168:	04c00713          	li	a4,76
+2040116c:	14e60e63          	beq	a2,a4,204012c8 <cbvprintf+0x510>
+20401170:	00078593          	mv	a1,a5
+	conv->specifier = *sp++;
+20401174:	0005c703          	lbu	a4,0(a1)
+	switch (conv->specifier) {
+20401178:	07800793          	li	a5,120
+	conv->specifier = *sp++;
+2040117c:	00158a13          	addi	s4,a1,1
+20401180:	04e101a3          	sb	a4,67(sp)
+	switch (conv->specifier) {
+20401184:	22e7ec63          	bltu	a5,a4,204013bc <cbvprintf+0x604>
+20401188:	05700793          	li	a5,87
+2040118c:	14e7ec63          	bltu	a5,a4,204012e4 <cbvprintf+0x52c>
+20401190:	04100793          	li	a5,65
+20401194:	00f70a63          	beq	a4,a5,204011a8 <cbvprintf+0x3f0>
+20401198:	fbb70713          	addi	a4,a4,-69
+2040119c:	0ff77713          	andi	a4,a4,255
+204011a0:	00200793          	li	a5,2
+204011a4:	20e7ec63          	bltu	a5,a4,204013bc <cbvprintf+0x604>
+		conv->specifier_cat = SPECIFIER_FP;
+204011a8:	04214783          	lbu	a5,66(sp)
+204011ac:	ff87f793          	andi	a5,a5,-8
+204011b0:	0047e793          	ori	a5,a5,4
+204011b4:	04f10123          	sb	a5,66(sp)
+			unsupported = true;
+204011b8:	00100793          	li	a5,1
+	conv->unsupported |= unsupported;
+204011bc:	04012703          	lw	a4,64(sp)
+204011c0:	00175713          	srli	a4,a4,0x1
+204011c4:	00177713          	andi	a4,a4,1
+204011c8:	00e7e7b3          	or	a5,a5,a4
+204011cc:	04015703          	lhu	a4,64(sp)
+204011d0:	00179793          	slli	a5,a5,0x1
+204011d4:	ffd77713          	andi	a4,a4,-3
+204011d8:	00f767b3          	or	a5,a4,a5
+204011dc:	04f11023          	sh	a5,64(sp)
+	return sp;
+204011e0:	cadff06f          	j	20400e8c <cbvprintf+0xd4>
+		val = 10U * val + *sp++ - '0';
+204011e4:	03070733          	mul	a4,a4,a6
+204011e8:	00050793          	mv	a5,a0
+204011ec:	fd070713          	addi	a4,a4,-48
+204011f0:	00e68733          	add	a4,a3,a4
+204011f4:	e7dff06f          	j	20401070 <cbvprintf+0x2b8>
+	switch (*sp) {
+204011f8:	07400713          	li	a4,116
+204011fc:	0ae60a63          	beq	a2,a4,204012b0 <cbvprintf+0x4f8>
+20401200:	07a00713          	li	a4,122
+20401204:	f6e616e3          	bne	a2,a4,20401170 <cbvprintf+0x3b8>
+		conv->length_mod = LENGTH_Z;
+20401208:	04015783          	lhu	a5,64(sp)
+2040120c:	ffff8737          	lui	a4,0xffff8
+20401210:	7ff70713          	addi	a4,a4,2047 # ffff87ff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff8800>
+20401214:	00e7f7b3          	and	a5,a5,a4
+20401218:	00003737          	lui	a4,0x3
+		conv->unsupported = true;
+2040121c:	00e7e7b3          	or	a5,a5,a4
+20401220:	04f11023          	sh	a5,64(sp)
+		break;
+20401224:	f51ff06f          	j	20401174 <cbvprintf+0x3bc>
+		if (*++sp == 'h') {
+20401228:	04015503          	lhu	a0,64(sp)
+2040122c:	0017c803          	lbu	a6,1(a5)
+20401230:	ffff86b7          	lui	a3,0xffff8
+20401234:	7ff68713          	addi	a4,a3,2047 # ffff87ff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff8800>
+			conv->length_mod = LENGTH_HH;
+20401238:	00a77733          	and	a4,a4,a0
+		if (*++sp == 'h') {
+2040123c:	00c81e63          	bne	a6,a2,20401258 <cbvprintf+0x4a0>
+			conv->length_mod = LENGTH_HH;
+20401240:	000016b7          	lui	a3,0x1
+20401244:	80068693          	addi	a3,a3,-2048 # 800 <CONFIG_ISR_STACK_SIZE>
+			conv->length_mod = LENGTH_LL;
+20401248:	00d76733          	or	a4,a4,a3
+2040124c:	04e11023          	sh	a4,64(sp)
+			++sp;
+20401250:	00278593          	addi	a1,a5,2
+20401254:	f21ff06f          	j	20401174 <cbvprintf+0x3bc>
+			conv->length_mod = LENGTH_H;
+20401258:	000017b7          	lui	a5,0x1
+			conv->length_mod = LENGTH_L;
+2040125c:	00f76733          	or	a4,a4,a5
+20401260:	04e11023          	sh	a4,64(sp)
+20401264:	f11ff06f          	j	20401174 <cbvprintf+0x3bc>
+		if (*++sp == 'l') {
+20401268:	04015503          	lhu	a0,64(sp)
+2040126c:	0017c803          	lbu	a6,1(a5) # 1001 <__kernel_ram_size+0xa5>
+20401270:	ffff86b7          	lui	a3,0xffff8
+20401274:	7ff68713          	addi	a4,a3,2047 # ffff87ff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff8800>
+			conv->length_mod = LENGTH_LL;
+20401278:	00a77733          	and	a4,a4,a0
+		if (*++sp == 'l') {
+2040127c:	00c81663          	bne	a6,a2,20401288 <cbvprintf+0x4d0>
+			conv->length_mod = LENGTH_LL;
+20401280:	000026b7          	lui	a3,0x2
+20401284:	fc5ff06f          	j	20401248 <cbvprintf+0x490>
+			conv->length_mod = LENGTH_L;
+20401288:	000027b7          	lui	a5,0x2
+2040128c:	80078793          	addi	a5,a5,-2048 # 1800 <__kernel_ram_size+0x8a4>
+20401290:	fcdff06f          	j	2040125c <cbvprintf+0x4a4>
+		conv->length_mod = LENGTH_J;
+20401294:	04015783          	lhu	a5,64(sp)
+20401298:	ffff8737          	lui	a4,0xffff8
+2040129c:	7ff70713          	addi	a4,a4,2047 # ffff87ff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff8800>
+204012a0:	00e7f7b3          	and	a5,a5,a4
+204012a4:	00003737          	lui	a4,0x3
+		conv->length_mod = LENGTH_T;
+204012a8:	80070713          	addi	a4,a4,-2048 # 2800 <__kernel_ram_size+0x18a4>
+204012ac:	f71ff06f          	j	2040121c <cbvprintf+0x464>
+204012b0:	04015783          	lhu	a5,64(sp)
+204012b4:	ffff8737          	lui	a4,0xffff8
+204012b8:	7ff70713          	addi	a4,a4,2047 # ffff87ff <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff8800>
+204012bc:	00e7f7b3          	and	a5,a5,a4
+204012c0:	00004737          	lui	a4,0x4
+204012c4:	fe5ff06f          	j	204012a8 <cbvprintf+0x4f0>
+		conv->unsupported = true;
+204012c8:	04015783          	lhu	a5,64(sp)
+204012cc:	ffff8737          	lui	a4,0xffff8
+204012d0:	7fd70713          	addi	a4,a4,2045 # ffff87fd <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffff87fe>
+204012d4:	00e7f7b3          	and	a5,a5,a4
+204012d8:	00004737          	lui	a4,0x4
+204012dc:	00270713          	addi	a4,a4,2 # 4002 <__rom_region_size+0xdd2>
+204012e0:	f3dff06f          	j	2040121c <cbvprintf+0x464>
+	switch (conv->specifier) {
+204012e4:	fa870793          	addi	a5,a4,-88
+204012e8:	0ff7f793          	andi	a5,a5,255
+204012ec:	02000693          	li	a3,32
+204012f0:	0cf6e663          	bltu	a3,a5,204013bc <cbvprintf+0x604>
+204012f4:	204036b7          	lui	a3,0x20403
+204012f8:	00279793          	slli	a5,a5,0x2
+204012fc:	10c68693          	addi	a3,a3,268 # 2040310c <__clz_tab+0x124>
+20401300:	00d787b3          	add	a5,a5,a3
+20401304:	0007a783          	lw	a5,0(a5)
+20401308:	00078067          	jr	a5
+		conv->specifier_cat = SPECIFIER_SINT;
+2040130c:	04214783          	lbu	a5,66(sp)
+20401310:	ff87f793          	andi	a5,a5,-8
+20401314:	0017e793          	ori	a5,a5,1
+		if (conv->length_mod == LENGTH_UPPER_L) {
+20401318:	04015683          	lhu	a3,64(sp)
+		conv->specifier_cat = SPECIFIER_UINT;
+2040131c:	04f10123          	sb	a5,66(sp)
+		if (conv->length_mod == LENGTH_UPPER_L) {
+20401320:	000087b7          	lui	a5,0x8
+20401324:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x45d0>
+20401328:	00f6f7b3          	and	a5,a3,a5
+2040132c:	01079793          	slli	a5,a5,0x10
+20401330:	0107d793          	srli	a5,a5,0x10
+20401334:	00004637          	lui	a2,0x4
+20401338:	00c79663          	bne	a5,a2,20401344 <cbvprintf+0x58c>
+			conv->invalid = true;
+2040133c:	0016e693          	ori	a3,a3,1
+20401340:	04d11023          	sh	a3,64(sp)
+		if (conv->specifier == 'c') {
+20401344:	06300693          	li	a3,99
+	bool unsupported = false;
+20401348:	00000793          	li	a5,0
+		if (conv->specifier == 'c') {
+2040134c:	e6d718e3          	bne	a4,a3,204011bc <cbvprintf+0x404>
+		if (conv->length_mod != LENGTH_NONE) {
+20401350:	04015703          	lhu	a4,64(sp)
+20401354:	000087b7          	lui	a5,0x8
+20401358:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x45d0>
+2040135c:	00e7f7b3          	and	a5,a5,a4
+20401360:	00f037b3          	snez	a5,a5
+20401364:	e59ff06f          	j	204011bc <cbvprintf+0x404>
+		conv->specifier_cat = SPECIFIER_UINT;
+20401368:	04214783          	lbu	a5,66(sp)
+2040136c:	ff87f793          	andi	a5,a5,-8
+20401370:	0027e793          	ori	a5,a5,2
+20401374:	fa5ff06f          	j	20401318 <cbvprintf+0x560>
+		conv->specifier_cat = SPECIFIER_PTR;
+20401378:	04214783          	lbu	a5,66(sp)
+		if (conv->length_mod == LENGTH_UPPER_L) {
+2040137c:	04015703          	lhu	a4,64(sp)
+		conv->specifier_cat = SPECIFIER_PTR;
+20401380:	ff87f793          	andi	a5,a5,-8
+20401384:	0037e793          	ori	a5,a5,3
+20401388:	04f10123          	sb	a5,66(sp)
+		if (conv->length_mod == LENGTH_UPPER_L) {
+2040138c:	000087b7          	lui	a5,0x8
+20401390:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x45d0>
+20401394:	00e7f7b3          	and	a5,a5,a4
+20401398:	ffffc737          	lui	a4,0xffffc
+2040139c:	00e787b3          	add	a5,a5,a4
+204013a0:	0017b793          	seqz	a5,a5
+204013a4:	e19ff06f          	j	204011bc <cbvprintf+0x404>
+		conv->specifier_cat = SPECIFIER_PTR;
+204013a8:	04214783          	lbu	a5,66(sp)
+204013ac:	ff87f793          	andi	a5,a5,-8
+204013b0:	0037e793          	ori	a5,a5,3
+204013b4:	04f10123          	sb	a5,66(sp)
+204013b8:	f99ff06f          	j	20401350 <cbvprintf+0x598>
+		conv->invalid = true;
+204013bc:	04015783          	lhu	a5,64(sp)
+204013c0:	0017e793          	ori	a5,a5,1
+204013c4:	04f11023          	sh	a5,64(sp)
+	bool unsupported = false;
+204013c8:	00000793          	li	a5,0
+		break;
+204013cc:	df1ff06f          	j	204011bc <cbvprintf+0x404>
+		} else if (conv->width_present) {
+204013d0:	0807f793          	andi	a5,a5,128
+204013d4:	00078863          	beqz	a5,204013e4 <cbvprintf+0x62c>
+			width = conv->width_value;
+204013d8:	04412483          	lw	s1,68(sp)
+204013dc:	000c8413          	mv	s0,s9
+204013e0:	ad1ff06f          	j	20400eb0 <cbvprintf+0xf8>
+204013e4:	000c8413          	mv	s0,s9
+		int width = -1;
+204013e8:	fff00493          	li	s1,-1
+204013ec:	ac5ff06f          	j	20400eb0 <cbvprintf+0xf8>
+		} else if (conv->prec_present) {
+204013f0:	20077713          	andi	a4,a4,512
+		int precision = -1;
+204013f4:	fff00a93          	li	s5,-1
+		} else if (conv->prec_present) {
+204013f8:	ac070ee3          	beqz	a4,20400ed4 <cbvprintf+0x11c>
+			precision = conv->prec_value;
+204013fc:	04812a83          	lw	s5,72(sp)
+20401400:	ad5ff06f          	j	20400ed4 <cbvprintf+0x11c>
+					value->sint = va_arg(ap, long);
+20401404:	00440513          	addi	a0,s0,4
+					value->uint = (wchar_t)va_arg(ap,
+20401408:	00042683          	lw	a3,0(s0)
+2040140c:	02d12823          	sw	a3,48(sp)
+20401410:	41f6d693          	srai	a3,a3,0x1f
+20401414:	01c0006f          	j	20401430 <cbvprintf+0x678>
+					(sint_value_type)va_arg(ap, long long);
+20401418:	00740413          	addi	s0,s0,7
+2040141c:	ff847413          	andi	s0,s0,-8
+				value->sint =
+20401420:	00042603          	lw	a2,0(s0)
+20401424:	00442683          	lw	a3,4(s0)
+					(sint_value_type)va_arg(ap, long long);
+20401428:	00840513          	addi	a0,s0,8
+				value->sint =
+2040142c:	02c12823          	sw	a2,48(sp)
+20401430:	02d12a23          	sw	a3,52(sp)
+					(uint_value_type)va_arg(ap, size_t);
+20401434:	00050413          	mv	s0,a0
+20401438:	b05ff06f          	j	20400f3c <cbvprintf+0x184>
+			} else if (length_mod == LENGTH_H) {
+2040143c:	00200693          	li	a3,2
+20401440:	aed71ee3          	bne	a4,a3,20400f3c <cbvprintf+0x184>
+				value->sint = (short)value->sint;
+20401444:	03011683          	lh	a3,48(sp)
+20401448:	02d12823          	sw	a3,48(sp)
+2040144c:	41f6d693          	srai	a3,a3,0x1f
+				value->dbl = va_arg(ap, double);
+20401450:	02d12a23          	sw	a3,52(sp)
+20401454:	ae9ff06f          	j	20400f3c <cbvprintf+0x184>
+		} else if (specifier_cat == SPECIFIER_UINT) {
+20401458:	00200513          	li	a0,2
+2040145c:	06a69463          	bne	a3,a0,204014c4 <cbvprintf+0x70c>
+			switch (length_mod) {
+20401460:	00500693          	li	a3,5
+20401464:	fad70ae3          	beq	a4,a3,20401418 <cbvprintf+0x660>
+20401468:	00e6ea63          	bltu	a3,a4,2040147c <cbvprintf+0x6c4>
+2040146c:	00300693          	li	a3,3
+20401470:	02d70a63          	beq	a4,a3,204014a4 <cbvprintf+0x6ec>
+20401474:	00400693          	li	a3,4
+20401478:	fad700e3          	beq	a4,a3,20401418 <cbvprintf+0x660>
+					(uint_value_type)va_arg(ap, size_t);
+2040147c:	00042683          	lw	a3,0(s0)
+20401480:	02012a23          	sw	zero,52(sp)
+20401484:	00440413          	addi	s0,s0,4
+20401488:	02d12823          	sw	a3,48(sp)
+			if (length_mod == LENGTH_HH) {
+2040148c:	00100693          	li	a3,1
+20401490:	aad700e3          	beq	a4,a3,20400f30 <cbvprintf+0x178>
+			} else if (length_mod == LENGTH_H) {
+20401494:	00200693          	li	a3,2
+20401498:	aad712e3          	bne	a4,a3,20400f3c <cbvprintf+0x184>
+				value->uint = (unsigned short)value->uint;
+2040149c:	03015683          	lhu	a3,48(sp)
+204014a0:	a95ff06f          	j	20400f34 <cbvprintf+0x17c>
+				if ((!WCHAR_IS_SIGNED)
+204014a4:	04314603          	lbu	a2,67(sp)
+204014a8:	06300693          	li	a3,99
+				value->sint = va_arg(ap, int);
+204014ac:	00440513          	addi	a0,s0,4
+				if ((!WCHAR_IS_SIGNED)
+204014b0:	f4d60ce3          	beq	a2,a3,20401408 <cbvprintf+0x650>
+					value->uint = va_arg(ap, unsigned long);
+204014b4:	00042683          	lw	a3,0(s0)
+204014b8:	02012a23          	sw	zero,52(sp)
+204014bc:	02d12823          	sw	a3,48(sp)
+204014c0:	f75ff06f          	j	20401434 <cbvprintf+0x67c>
+		} else if (specifier_cat == SPECIFIER_FP) {
+204014c4:	00400613          	li	a2,4
+204014c8:	04c69a63          	bne	a3,a2,2040151c <cbvprintf+0x764>
+			if (length_mod == LENGTH_UPPER_L) {
+204014cc:	00800693          	li	a3,8
+204014d0:	02d71863          	bne	a4,a3,20401500 <cbvprintf+0x748>
+				value->ldbl = va_arg(ap, long double);
+204014d4:	00042683          	lw	a3,0(s0)
+204014d8:	0006a803          	lw	a6,0(a3)
+204014dc:	0046a503          	lw	a0,4(a3)
+204014e0:	0086a603          	lw	a2,8(a3)
+204014e4:	00c6a683          	lw	a3,12(a3)
+204014e8:	03012823          	sw	a6,48(sp)
+204014ec:	02a12a23          	sw	a0,52(sp)
+204014f0:	02c12c23          	sw	a2,56(sp)
+204014f4:	02d12e23          	sw	a3,60(sp)
+			value->ptr = va_arg(ap, void *);
+204014f8:	00440413          	addi	s0,s0,4
+204014fc:	a41ff06f          	j	20400f3c <cbvprintf+0x184>
+				value->dbl = va_arg(ap, double);
+20401500:	00740693          	addi	a3,s0,7
+20401504:	ff86f693          	andi	a3,a3,-8
+20401508:	0006a603          	lw	a2,0(a3)
+2040150c:	00868413          	addi	s0,a3,8
+20401510:	0046a683          	lw	a3,4(a3)
+20401514:	02c12823          	sw	a2,48(sp)
+20401518:	f39ff06f          	j	20401450 <cbvprintf+0x698>
+		} else if (specifier_cat == SPECIFIER_PTR) {
+2040151c:	00300613          	li	a2,3
+20401520:	a0c69ee3          	bne	a3,a2,20400f3c <cbvprintf+0x184>
+			value->ptr = va_arg(ap, void *);
+20401524:	00042683          	lw	a3,0(s0)
+20401528:	02d12823          	sw	a3,48(sp)
+2040152c:	fcdff06f          	j	204014f8 <cbvprintf+0x740>
+		switch (conv->specifier) {
+20401530:	04314683          	lbu	a3,67(sp)
+20401534:	07800613          	li	a2,120
+20401538:	92d664e3          	bltu	a2,a3,20400e60 <cbvprintf+0xa8>
+2040153c:	06200613          	li	a2,98
+20401540:	00d66e63          	bltu	a2,a3,2040155c <cbvprintf+0x7a4>
+20401544:	02500713          	li	a4,37
+20401548:	02e68c63          	beq	a3,a4,20401580 <cbvprintf+0x7c8>
+2040154c:	05800713          	li	a4,88
+20401550:	90e698e3          	bne	a3,a4,20400e60 <cbvprintf+0xa8>
+20401554:	00000b13          	li	s6,0
+20401558:	2080006f          	j	20401760 <cbvprintf+0x9a8>
+2040155c:	f9d68693          	addi	a3,a3,-99
+20401560:	0ff6f693          	andi	a3,a3,255
+20401564:	01500613          	li	a2,21
+20401568:	8ed66ce3          	bltu	a2,a3,20400e60 <cbvprintf+0xa8>
+2040156c:	00412783          	lw	a5,4(sp)
+20401570:	00269693          	slli	a3,a3,0x2
+20401574:	00f686b3          	add	a3,a3,a5
+20401578:	0006a683          	lw	a3,0(a3)
+2040157c:	00068067          	jr	a3
+			OUTC('%');
+20401580:	00098593          	mv	a1,s3
+20401584:	02500513          	li	a0,37
+20401588:	000900e7          	jalr	s2
+2040158c:	2c054a63          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20401590:	001d8d93          	addi	s11,s11,1
+			break;
+20401594:	8cdff06f          	j	20400e60 <cbvprintf+0xa8>
+			bps = (const char *)value->ptr;
+20401598:	03012c83          	lw	s9,48(sp)
+			if (precision >= 0) {
+2040159c:	160ac063          	bltz	s5,204016fc <cbvprintf+0x944>
+				len = strnlen(bps, precision);
+204015a0:	000a8593          	mv	a1,s5
+204015a4:	000c8513          	mv	a0,s9
+204015a8:	48c000ef          	jal	ra,20401a34 <strnlen>
+			bpe = bps + len;
+204015ac:	00ac8d33          	add	s10,s9,a0
+		char sign = 0;
+204015b0:	00000b13          	li	s6,0
+		if (bps == NULL) {
+204015b4:	8a0c86e3          	beqz	s9,20400e60 <cbvprintf+0xa8>
+		size_t nj_len = (bpe - bps);
+204015b8:	419d07b3          	sub	a5,s10,s9
+		if (sign != 0) {
+204015bc:	000b0463          	beqz	s6,204015c4 <cbvprintf+0x80c>
+			nj_len += 1U;
+204015c0:	00178793          	addi	a5,a5,1
+		if (conv->altform_0c) {
+204015c4:	04214703          	lbu	a4,66(sp)
+204015c8:	01077693          	andi	a3,a4,16
+204015cc:	26068663          	beqz	a3,20401838 <cbvprintf+0xa80>
+			nj_len += 2U;
+204015d0:	00278793          	addi	a5,a5,2
+		nj_len += conv->pad0_value;
+204015d4:	04412683          	lw	a3,68(sp)
+		if (conv->pad_fp) {
+204015d8:	04077713          	andi	a4,a4,64
+		nj_len += conv->pad0_value;
+204015dc:	00d787b3          	add	a5,a5,a3
+		if (conv->pad_fp) {
+204015e0:	00070663          	beqz	a4,204015ec <cbvprintf+0x834>
+			nj_len += conv->pad0_pre_exp;
+204015e4:	04812703          	lw	a4,72(sp)
+204015e8:	00e787b3          	add	a5,a5,a4
+		if (width > 0) {
+204015ec:	04905c63          	blez	s1,20401644 <cbvprintf+0x88c>
+			width -= (int)nj_len;
+204015f0:	40f484b3          	sub	s1,s1,a5
+			if (!conv->flag_dash) {
+204015f4:	04012783          	lw	a5,64(sp)
+204015f8:	0027d793          	srli	a5,a5,0x2
+204015fc:	0017f793          	andi	a5,a5,1
+20401600:	04079263          	bnez	a5,20401644 <cbvprintf+0x88c>
+				if (conv->flag_zero) {
+20401604:	04015783          	lhu	a5,64(sp)
+20401608:	0407f793          	andi	a5,a5,64
+2040160c:	28078863          	beqz	a5,2040189c <cbvprintf+0xae4>
+					if (sign != 0) {
+20401610:	280b0a63          	beqz	s6,204018a4 <cbvprintf+0xaec>
+						OUTC(sign);
+20401614:	00098593          	mv	a1,s3
+20401618:	000b0513          	mv	a0,s6
+2040161c:	000900e7          	jalr	s2
+20401620:	24054063          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20401624:	001d8d93          	addi	s11,s11,1
+					pad = '0';
+20401628:	03000793          	li	a5,48
+						sign = 0;
+2040162c:	00000b13          	li	s6,0
+20401630:	01b48ab3          	add	s5,s1,s11
+20401634:	00048713          	mv	a4,s1
+20401638:	409a8db3          	sub	s11,s5,s1
+				while (width-- > 0) {
+2040163c:	fff48493          	addi	s1,s1,-1
+20401640:	20e04463          	bgtz	a4,20401848 <cbvprintf+0xa90>
+		if (sign != 0) {
+20401644:	000b0c63          	beqz	s6,2040165c <cbvprintf+0x8a4>
+			OUTC(sign);
+20401648:	00098593          	mv	a1,s3
+2040164c:	000b0513          	mv	a0,s6
+20401650:	000900e7          	jalr	s2
+20401654:	20054663          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20401658:	001d8d93          	addi	s11,s11,1
+			if (conv->altform_0c | conv->altform_0) {
+2040165c:	04012783          	lw	a5,64(sp)
+20401660:	0147d713          	srli	a4,a5,0x14
+20401664:	00177713          	andi	a4,a4,1
+20401668:	00071863          	bnez	a4,20401678 <cbvprintf+0x8c0>
+2040166c:	0137d793          	srli	a5,a5,0x13
+20401670:	0017f793          	andi	a5,a5,1
+20401674:	00078c63          	beqz	a5,2040168c <cbvprintf+0x8d4>
+				OUTC('0');
+20401678:	00098593          	mv	a1,s3
+2040167c:	03000513          	li	a0,48
+20401680:	000900e7          	jalr	s2
+20401684:	1c054e63          	bltz	a0,20401860 <cbvprintf+0xaa8>
+20401688:	001d8d93          	addi	s11,s11,1
+			if (conv->altform_0c) {
+2040168c:	04214783          	lbu	a5,66(sp)
+20401690:	0107f793          	andi	a5,a5,16
+20401694:	00078c63          	beqz	a5,204016ac <cbvprintf+0x8f4>
+				OUTC(conv->specifier);
+20401698:	04314503          	lbu	a0,67(sp)
+2040169c:	00098593          	mv	a1,s3
+204016a0:	000900e7          	jalr	s2
+204016a4:	1a054e63          	bltz	a0,20401860 <cbvprintf+0xaa8>
+204016a8:	001d8d93          	addi	s11,s11,1
+			while (pad_len-- > 0) {
+204016ac:	04412783          	lw	a5,68(sp)
+204016b0:	01b78ab3          	add	s5,a5,s11
+204016b4:	41ba8733          	sub	a4,s5,s11
+204016b8:	1ee04a63          	bgtz	a4,204018ac <cbvprintf+0xaf4>
+			OUTS(bps, bpe);
+204016bc:	000d0693          	mv	a3,s10
+204016c0:	000c8613          	mv	a2,s9
+204016c4:	00098593          	mv	a1,s3
+204016c8:	00090513          	mv	a0,s2
+204016cc:	e74ff0ef          	jal	ra,20400d40 <outs>
+204016d0:	18054863          	bltz	a0,20401860 <cbvprintf+0xaa8>
+204016d4:	01b50db3          	add	s11,a0,s11
+		while (width > 0) {
+204016d8:	01b484b3          	add	s1,s1,s11
+204016dc:	41b487b3          	sub	a5,s1,s11
+204016e0:	f8f05063          	blez	a5,20400e60 <cbvprintf+0xa8>
+			OUTC(' ');
+204016e4:	00098593          	mv	a1,s3
+204016e8:	02000513          	li	a0,32
+204016ec:	000900e7          	jalr	s2
+204016f0:	16054863          	bltz	a0,20401860 <cbvprintf+0xaa8>
+204016f4:	001d8d93          	addi	s11,s11,1
+			--width;
+204016f8:	fe5ff06f          	j	204016dc <cbvprintf+0x924>
+				len = strlen(bps);
+204016fc:	000c8513          	mv	a0,s9
+20401700:	314000ef          	jal	ra,20401a14 <strlen>
+20401704:	ea9ff06f          	j	204015ac <cbvprintf+0x7f4>
+			buf[0] = CHAR_IS_SIGNED ? value->sint : value->uint;
+20401708:	03012783          	lw	a5,48(sp)
+			bps = buf;
+2040170c:	01810c93          	addi	s9,sp,24
+			bpe = buf + 1;
+20401710:	01910d13          	addi	s10,sp,25
+			buf[0] = CHAR_IS_SIGNED ? value->sint : value->uint;
+20401714:	00f10c23          	sb	a5,24(sp)
+			break;
+20401718:	00000b13          	li	s6,0
+2040171c:	e9dff06f          	j	204015b8 <cbvprintf+0x800>
+			if (conv->flag_plus) {
+20401720:	04015703          	lhu	a4,64(sp)
+				sign = '+';
+20401724:	02b00b13          	li	s6,43
+			if (conv->flag_plus) {
+20401728:	00877693          	andi	a3,a4,8
+2040172c:	00069663          	bnez	a3,20401738 <cbvprintf+0x980>
+				sign = ' ';
+20401730:	00171b13          	slli	s6,a4,0x1
+20401734:	020b7b13          	andi	s6,s6,32
+			sint = value->sint;
+20401738:	03412703          	lw	a4,52(sp)
+2040173c:	03012683          	lw	a3,48(sp)
+			if (sint < 0) {
+20401740:	02075063          	bgez	a4,20401760 <cbvprintf+0x9a8>
+				value->uint = (uint_value_type)-sint;
+20401744:	40d00633          	neg	a2,a3
+20401748:	40e00733          	neg	a4,a4
+2040174c:	00d036b3          	snez	a3,a3
+20401750:	40d70733          	sub	a4,a4,a3
+20401754:	02c12823          	sw	a2,48(sp)
+20401758:	02e12a23          	sw	a4,52(sp)
+				sign = '-';
+2040175c:	02d00b13          	li	s6,45
+			bps = encode_uint(value->uint, conv, buf, bpe);
+20401760:	03012503          	lw	a0,48(sp)
+20401764:	03412583          	lw	a1,52(sp)
+20401768:	02e10713          	addi	a4,sp,46
+2040176c:	01810693          	addi	a3,sp,24
+20401770:	04010613          	addi	a2,sp,64
+20401774:	c70ff0ef          	jal	ra,20400be4 <encode_uint>
+20401778:	00050c93          	mv	s9,a0
+			if (precision >= 0) {
+2040177c:	02e10d13          	addi	s10,sp,46
+20401780:	e20acae3          	bltz	s5,204015b4 <cbvprintf+0x7fc>
+				conv->flag_zero = false;
+20401784:	04015683          	lhu	a3,64(sp)
+				size_t len = bpe - bps;
+20401788:	419d0733          	sub	a4,s10,s9
+				conv->flag_zero = false;
+2040178c:	fbf6f693          	andi	a3,a3,-65
+20401790:	04d11023          	sh	a3,64(sp)
+				if (len < (size_t)precision) {
+20401794:	e35770e3          	bgeu	a4,s5,204015b4 <cbvprintf+0x7fc>
+					conv->pad0_value = precision - (int)len;
+20401798:	40ea87b3          	sub	a5,s5,a4
+2040179c:	04f12223          	sw	a5,68(sp)
+204017a0:	e15ff06f          	j	204015b4 <cbvprintf+0x7fc>
+			if (value->ptr != NULL) {
+204017a4:	03012503          	lw	a0,48(sp)
+204017a8:	08050263          	beqz	a0,2040182c <cbvprintf+0xa74>
+				bps = encode_uint((uintptr_t)value->ptr, conv,
+204017ac:	02e10713          	addi	a4,sp,46
+204017b0:	01810693          	addi	a3,sp,24
+204017b4:	04010613          	addi	a2,sp,64
+204017b8:	00000593          	li	a1,0
+204017bc:	c28ff0ef          	jal	ra,20400be4 <encode_uint>
+				conv->altform_0c = true;
+204017c0:	04215703          	lhu	a4,66(sp)
+204017c4:	000086b7          	lui	a3,0x8
+204017c8:	81068693          	addi	a3,a3,-2032 # 7810 <__rom_region_size+0x45e0>
+204017cc:	0ef77713          	andi	a4,a4,239
+204017d0:	00d76733          	or	a4,a4,a3
+				bps = encode_uint((uintptr_t)value->ptr, conv,
+204017d4:	00050c93          	mv	s9,a0
+				conv->altform_0c = true;
+204017d8:	04e11123          	sh	a4,66(sp)
+		char sign = 0;
+204017dc:	00000b13          	li	s6,0
+				goto prec_int_pad0;
+204017e0:	f9dff06f          	j	2040177c <cbvprintf+0x9c4>
+	switch ((enum length_mod_enum)conv->length_mod) {
+204017e4:	00700693          	li	a3,7
+				store_count(conv, value->ptr, count);
+204017e8:	03012783          	lw	a5,48(sp)
+	switch ((enum length_mod_enum)conv->length_mod) {
+204017ec:	e6e6ea63          	bltu	a3,a4,20400e60 <cbvprintf+0xa8>
+204017f0:	00812683          	lw	a3,8(sp)
+204017f4:	00271713          	slli	a4,a4,0x2
+204017f8:	00d70733          	add	a4,a4,a3
+204017fc:	00072703          	lw	a4,0(a4) # ffffc000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0xffffc001>
+20401800:	00070067          	jr	a4
+		*(signed char *)dp = (signed char)count;
+20401804:	01b78023          	sb	s11,0(a5)
+		break;
+20401808:	e58ff06f          	j	20400e60 <cbvprintf+0xa8>
+		*(short *)dp = (short)count;
+2040180c:	01b79023          	sh	s11,0(a5)
+		break;
+20401810:	e50ff06f          	j	20400e60 <cbvprintf+0xa8>
+		*(intmax_t *)dp = (intmax_t)count;
+20401814:	41fdd713          	srai	a4,s11,0x1f
+20401818:	01b7a023          	sw	s11,0(a5)
+2040181c:	00e7a223          	sw	a4,4(a5)
+		break;
+20401820:	e40ff06f          	j	20400e60 <cbvprintf+0xa8>
+		*(ptrdiff_t *)dp = (ptrdiff_t)count;
+20401824:	01b7a023          	sw	s11,0(a5)
+		break;
+20401828:	e38ff06f          	j	20400e60 <cbvprintf+0xa8>
+			bps = "(nil)";
+2040182c:	000b8c93          	mv	s9,s7
+			bpe = bps + 5;
+20401830:	000c0d13          	mv	s10,s8
+20401834:	ee5ff06f          	j	20401718 <cbvprintf+0x960>
+		} else if (conv->altform_0) {
+20401838:	00877693          	andi	a3,a4,8
+2040183c:	d8068ce3          	beqz	a3,204015d4 <cbvprintf+0x81c>
+			nj_len += 1U;
+20401840:	00178793          	addi	a5,a5,1
+20401844:	d91ff06f          	j	204015d4 <cbvprintf+0x81c>
+					OUTC(pad);
+20401848:	00078513          	mv	a0,a5
+2040184c:	00098593          	mv	a1,s3
+20401850:	00f12623          	sw	a5,12(sp)
+20401854:	000900e7          	jalr	s2
+20401858:	00c12783          	lw	a5,12(sp)
+2040185c:	dc055ce3          	bgez	a0,20401634 <cbvprintf+0x87c>
+#undef OUTS
+#undef OUTC
+}
+20401860:	08c12083          	lw	ra,140(sp)
+20401864:	08812403          	lw	s0,136(sp)
+20401868:	08412483          	lw	s1,132(sp)
+2040186c:	08012903          	lw	s2,128(sp)
+20401870:	07c12983          	lw	s3,124(sp)
+20401874:	07812a03          	lw	s4,120(sp)
+20401878:	07412a83          	lw	s5,116(sp)
+2040187c:	07012b03          	lw	s6,112(sp)
+20401880:	06c12b83          	lw	s7,108(sp)
+20401884:	06812c03          	lw	s8,104(sp)
+20401888:	06412c83          	lw	s9,100(sp)
+2040188c:	06012d03          	lw	s10,96(sp)
+20401890:	05c12d83          	lw	s11,92(sp)
+20401894:	09010113          	addi	sp,sp,144
+20401898:	00008067          	ret
+				char pad = ' ';
+2040189c:	02000793          	li	a5,32
+204018a0:	d91ff06f          	j	20401630 <cbvprintf+0x878>
+					pad = '0';
+204018a4:	03000793          	li	a5,48
+204018a8:	d89ff06f          	j	20401630 <cbvprintf+0x878>
+				OUTC('0');
+204018ac:	00098593          	mv	a1,s3
+204018b0:	03000513          	li	a0,48
+204018b4:	000900e7          	jalr	s2
+204018b8:	fa0544e3          	bltz	a0,20401860 <cbvprintf+0xaa8>
+204018bc:	001d8d93          	addi	s11,s11,1
+204018c0:	df5ff06f          	j	204016b4 <cbvprintf+0x8fc>
+
+204018c4 <_ConfigAbsSyms>:
+GEN_ABSOLUTE_SYM_KCONFIG(CONFIG_OUTPUT_DISASSEMBLY, 1);
+GEN_ABSOLUTE_SYM_KCONFIG(CONFIG_OUTPUT_PRINT_MEMORY_USAGE, 1);
+GEN_ABSOLUTE_SYM_KCONFIG(CONFIG_BUILD_OUTPUT_BIN, 1);
+GEN_ABSOLUTE_SYM_KCONFIG(CONFIG_COMPAT_INCLUDES, 1);
+
+GEN_ABS_SYM_END
+204018c4:	00008067          	ret
+
+204018c8 <arch_cpu_idle>:
+ * '_pm_save_flag' variable is non-zero.
+ *
+ * @return N/A
+ */
+void arch_cpu_idle(void)
+{
+204018c8:	ff010113          	addi	sp,sp,-16
+204018cc:	00112623          	sw	ra,12(sp)
+	sys_trace_idle();
+204018d0:	06c000ef          	jal	ra,2040193c <sys_trace_idle>
+ */
+static ALWAYS_INLINE void arch_irq_unlock(unsigned int key)
+{
+	ulong_t mstatus;
+
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+204018d4:	00800793          	li	a5,8
+204018d8:	3007a7f3          	csrrs	a5,mstatus,a5
+	__asm__ volatile("wfi");
+204018dc:	10500073          	wfi
+	riscv_idle(MSTATUS_IEN);
+}
+204018e0:	00c12083          	lw	ra,12(sp)
+204018e4:	01010113          	addi	sp,sp,16
+204018e8:	00008067          	ret
+
+204018ec <arch_irq_enable>:
+{
+#if defined(CONFIG_3RD_LEVEL_INTERRUPTS)
+	return ((irq >> 16) & 0xFF) != 0 ? 3 :
+		(((irq >> 8) & 0xFF) == 0 ? 1 : 2);
+#elif defined(CONFIG_2ND_LEVEL_INTERRUPTS)
+	return ((irq >> 8) & 0xFF) == 0 ? 1 : 2;
+204018ec:	00855793          	srli	a5,a0,0x8
+204018f0:	0ff7f713          	andi	a4,a5,255
+204018f4:	00071a63          	bnez	a4,20401908 <arch_irq_enable+0x1c>
+	 * CSR mie register is updated using atomic instruction csrrs
+	 * (atomic read and set bits in CSR register)
+	 */
+	__asm__ volatile ("csrrs %0, mie, %1\n"
+			  : "=r" (mie)
+			  : "r" (1 << irq));
+204018f8:	00100793          	li	a5,1
+204018fc:	00a79533          	sll	a0,a5,a0
+	__asm__ volatile ("csrrs %0, mie, %1\n"
+20401900:	30452573          	csrrs	a0,mie,a0
+}
+20401904:	00008067          	ret
+		riscv_plic_irq_enable(irq);
+20401908:	fff78513          	addi	a0,a5,-1
+2040190c:	25c0006f          	j	20401b68 <riscv_plic_irq_enable>
+
+20401910 <arch_irq_priority_set>:
+20401910:	00855513          	srli	a0,a0,0x8
+20401914:	0ff57793          	andi	a5,a0,255
+20401918:	00078663          	beqz	a5,20401924 <arch_irq_priority_set+0x14>
+#if defined(CONFIG_RISCV_HAS_PLIC)
+	unsigned int level = irq_get_level(irq);
+
+	if (level == 2) {
+		irq = irq_from_level_2(irq);
+		riscv_plic_set_priority(irq, prio);
+2040191c:	fff50513          	addi	a0,a0,-1
+20401920:	2800006f          	j	20401ba0 <riscv_plic_set_priority>
+#if defined(CONFIG_NUCLEI_ECLIC)
+	nuclei_eclic_set_priority(irq, prio);
+#endif
+
+	return ;
+}
+20401924:	00008067          	ret
+
+20401928 <soc_interrupt_init>:
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401928:	00800793          	li	a5,8
+2040192c:	3007b7f3          	csrrc	a5,mstatus,a5
+__weak void soc_interrupt_init(void)
+{
+	/* ensure that all interrupts are disabled */
+	(void)irq_lock();
+
+	__asm__ volatile ("csrwi mie, 0\n"
+20401930:	30405073          	csrwi	mie,0
+20401934:	34405073          	csrwi	mip,0
+			  "csrwi mip, 0\n");
+}
+20401938:	00008067          	ret
+
+2040193c <sys_trace_idle>:
+2040193c:	00008067          	ret
+
+20401940 <z_riscv_fatal_error>:
+ #define NO_REG "                "
+#endif
+
+FUNC_NORETURN void z_riscv_fatal_error(unsigned int reason,
+				       const z_arch_esf_t *esf)
+{
+20401940:	ff010113          	addi	sp,sp,-16
+20401944:	00112623          	sw	ra,12(sp)
+		LOG_ERR("   mepc: " PR_REG, esf->mepc);
+		LOG_ERR("mstatus: " PR_REG, esf->mstatus);
+		LOG_ERR("");
+	}
+
+	z_fatal_error(reason, esf);
+20401948:	48c000ef          	jal	ra,20401dd4 <z_fatal_error>
+
+2040194c <_Fault>:
+		return "unknown";
+	}
+}
+
+void _Fault(z_arch_esf_t *esf)
+{
+2040194c:	ff010113          	addi	sp,sp,-16
+20401950:	00112623          	sw	ra,12(sp)
+20401954:	00050593          	mv	a1,a0
+		}
+	}
+#endif /* CONFIG_USERSPACE */
+	ulong_t mcause;
+
+	__asm__ volatile("csrr %0, mcause" : "=r" (mcause));
+20401958:	342027f3          	csrr	a5,mcause
+
+#ifndef CONFIG_SOC_OPENISA_RV32M1_RISCV32
+	ulong_t mtval;
+	__asm__ volatile("csrr %0, mtval" : "=r" (mtval));
+2040195c:	343027f3          	csrr	a5,mtval
+#endif
+
+	unsigned int reason = K_ERR_CPU_EXCEPTION;
+
+#if !defined(CONFIG_USERSPACE)
+	if (esf->t5 == ARCH_EXCEPT_MARKER) {
+20401960:	01c52703          	lw	a4,28(a0)
+20401964:	00deb7b7          	lui	a5,0xdeb
+20401968:	d0078793          	addi	a5,a5,-768 # dead00 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xde2d00>
+2040196c:	00000513          	li	a0,0
+20401970:	00f71463          	bne	a4,a5,20401978 <_Fault+0x2c>
+		reason = esf->t6;
+20401974:	0205a503          	lw	a0,32(a1)
+	z_fatal_error(reason, esf);
+20401978:	45c000ef          	jal	ra,20401dd4 <z_fatal_error>
+
+2040197c <z_irq_spurious>:
+#include <kernel_internal.h>
+#include <logging/log.h>
+LOG_MODULE_DECLARE(os, CONFIG_KERNEL_LOG_LEVEL);
+
+FUNC_NORETURN void z_irq_spurious(const void *unused)
+{
+2040197c:	ff010113          	addi	sp,sp,-16
+20401980:	00112623          	sw	ra,12(sp)
+	ulong_t mcause;
+
+	ARG_UNUSED(unused);
+
+	__asm__ volatile("csrr %0, mcause" : "=r" (mcause));
+20401984:	342027f3          	csrr	a5,mcause
+	if (mcause == RISCV_MACHINE_EXT_IRQ) {
+		LOG_ERR("PLIC interrupt line causing the IRQ: %d",
+			riscv_plic_get_irq());
+	}
+#endif
+	z_riscv_fatal_error(K_ERR_SPURIOUS_IRQ, NULL);
+20401988:	00000593          	li	a1,0
+2040198c:	00100513          	li	a0,1
+20401990:	fb1ff0ef          	jal	ra,20401940 <z_riscv_fatal_error>
+
+20401994 <_PrepC>:
+ *
+ * @return N/A
+ */
+
+void _PrepC(void)
+{
+20401994:	ff010113          	addi	sp,sp,-16
+20401998:	00112623          	sw	ra,12(sp)
+	z_bss_zero();
+2040199c:	56c000ef          	jal	ra,20401f08 <z_bss_zero>
+#ifdef CONFIG_XIP
+	z_data_copy();
+204019a0:	6e9000ef          	jal	ra,20402888 <z_data_copy>
+#endif
+#if defined(CONFIG_RISCV_SOC_INTERRUPT_INIT)
+	soc_interrupt_init();
+204019a4:	f85ff0ef          	jal	ra,20401928 <soc_interrupt_init>
+#endif
+#ifdef CONFIG_PMP_STACK_GUARD
+	z_riscv_configure_interrupt_stack_guard();
+#endif
+	z_cstart();
+204019a8:	580000ef          	jal	ra,20401f28 <z_cstart>
+
+204019ac <__initialize>:
+SECTION_FUNC(TEXT, __initialize)
+	/*
+	 * This will boot master core, just halt other cores.
+	 * Note: need to be updated for complete SMP support
+	 */
+	csrr a0, mhartid
+204019ac:	f1402573          	csrr	a0,mhartid
+	beqz a0, boot_master_core
+204019b0:	00050663          	beqz	a0,204019bc <boot_master_core>
+
+204019b4 <loop_slave_core>:
+
+loop_slave_core:
+	wfi
+204019b4:	10500073          	wfi
+	j loop_slave_core
+204019b8:	ffdff06f          	j	204019b4 <loop_slave_core>
+
+204019bc <boot_master_core>:
+
+	/*
+	 * Initially, setup stack pointer to
+	 * z_interrupt_stacks + CONFIG_ISR_STACK_SIZE
+	 */
+	la sp, z_interrupt_stacks
+204019bc:	5fbff117          	auipc	sp,0x5fbff
+204019c0:	d9410113          	addi	sp,sp,-620 # 80000750 <z_interrupt_stacks>
+	li t0, CONFIG_ISR_STACK_SIZE
+204019c4:	000012b7          	lui	t0,0x1
+204019c8:	80028293          	addi	t0,t0,-2048 # 800 <CONFIG_ISR_STACK_SIZE>
+	add sp, sp, t0
+204019cc:	00510133          	add	sp,sp,t0
+
+	csrw mscratch, sp
+204019d0:	34011073          	csrw	mscratch,sp
+
+	/*
+	 * Jump into C domain. _PrepC zeroes BSS, copies rw data into RAM,
+	 * and then enters kernel z_cstart
+	 */
+	call _PrepC
+204019d4:	fc1ff0ef          	jal	ra,20401994 <_PrepC>
+
+204019d8 <z_thread_entry_wrapper>:
+	 * in registers a0, a1, a2 and a3. These registers are used as arguments
+	 * to function z_thread_entry. Hence, just call z_thread_entry with
+	 * return address set to 0 to indicate a non-returning function call.
+	 */
+
+	jal x0, z_thread_entry
+204019d8:	9e8ff06f          	j	20400bc0 <z_thread_entry>
+
+204019dc <arch_new_thread>:
+#ifdef CONFIG_RISCV_SOC_CONTEXT_SAVE
+	const struct soc_esf soc_esf_init = {SOC_ESF_INIT};
+#endif
+
+	/* Initial stack frame for thread */
+	stack_init = (struct __esf *)Z_STACK_PTR_ALIGN(
+204019dc:	fb460613          	addi	a2,a2,-76 # 3fb4 <__rom_region_size+0xd84>
+ * @param ptr Proposed stack pointer address
+ * @return Properly aligned stack pointer address
+ */
+static inline char *z_stack_ptr_align(char *ptr)
+{
+	return (char *)ROUND_DOWN(ptr, ARCH_STACK_PTR_ALIGN);
+204019e0:	ff067613          	andi	a2,a2,-16
+				);
+
+	/* Setup the initial stack frame */
+	stack_init->a0 = (ulong_t)entry;
+	stack_init->a1 = (ulong_t)p1;
+	stack_init->a2 = (ulong_t)p2;
+204019e4:	02f62623          	sw	a5,44(a2)
+	 *    restored following the MSTATUS value set within the thread stack;
+	 * 2) the core will jump to z_thread_entry_wrapper, as the program
+	 *    counter will be restored following the MEPC value set within the
+	 *    thread stack.
+	 */
+	stack_init->mstatus = MSTATUS_DEF_RESTORE;
+204019e8:	000027b7          	lui	a5,0x2
+204019ec:	88078793          	addi	a5,a5,-1920 # 1880 <__kernel_ram_size+0x924>
+204019f0:	04f62423          	sw	a5,72(a2)
+#elif defined(CONFIG_FPU)
+	/* Unshared FP mode: enable FPU of each thread. */
+	stack_init->mstatus |= MSTATUS_FS_INIT;
+#endif
+
+	stack_init->mepc = (ulong_t)z_thread_entry_wrapper;
+204019f4:	204027b7          	lui	a5,0x20402
+204019f8:	9d878793          	addi	a5,a5,-1576 # 204019d8 <z_thread_entry_wrapper>
+	stack_init->a0 = (ulong_t)entry;
+204019fc:	02d62223          	sw	a3,36(a2)
+	stack_init->a1 = (ulong_t)p1;
+20401a00:	02e62423          	sw	a4,40(a2)
+	stack_init->a3 = (ulong_t)p3;
+20401a04:	03062823          	sw	a6,48(a2)
+	stack_init->mepc = (ulong_t)z_thread_entry_wrapper;
+20401a08:	04f62223          	sw	a5,68(a2)
+
+#ifdef CONFIG_RISCV_SOC_CONTEXT_SAVE
+	stack_init->soc_context = soc_esf_init;
+#endif
+
+	thread->callee_saved.sp = (ulong_t)stack_init;
+20401a0c:	02c52823          	sw	a2,48(a0)
+}
+20401a10:	00008067          	ret
+
+20401a14 <strlen>:
+ *
+ * @return number of bytes in string <s>
+ */
+
+size_t strlen(const char *s)
+{
+20401a14:	00050793          	mv	a5,a0
+	size_t n = 0;
+20401a18:	00000513          	li	a0,0
+
+	while (*s != '\0') {
+20401a1c:	00a78733          	add	a4,a5,a0
+20401a20:	00074703          	lbu	a4,0(a4)
+20401a24:	00071463          	bnez	a4,20401a2c <strlen+0x18>
+		s++;
+		n++;
+	}
+
+	return n;
+}
+20401a28:	00008067          	ret
+		n++;
+20401a2c:	00150513          	addi	a0,a0,1
+20401a30:	fedff06f          	j	20401a1c <strlen+0x8>
+
+20401a34 <strnlen>:
+ *
+ * @return number of bytes in fixed-size string <s>
+ */
+
+size_t strnlen(const char *s, size_t maxlen)
+{
+20401a34:	00050793          	mv	a5,a0
+	size_t n = 0;
+20401a38:	00000513          	li	a0,0
+
+	while (*s != '\0' && n < maxlen) {
+20401a3c:	00a78733          	add	a4,a5,a0
+20401a40:	00074703          	lbu	a4,0(a4)
+20401a44:	00070463          	beqz	a4,20401a4c <strnlen+0x18>
+20401a48:	00b51463          	bne	a0,a1,20401a50 <strnlen+0x1c>
+		s++;
+		n++;
+	}
+
+	return n;
+}
+20401a4c:	00008067          	ret
+		n++;
+20401a50:	00150513          	addi	a0,a0,1
+20401a54:	fe9ff06f          	j	20401a3c <strnlen+0x8>
+
+20401a58 <memcpy>:
+	}
+#endif
+
+	/* do byte-sized copying until finished */
+
+	while (n > 0) {
+20401a58:	00000793          	li	a5,0
+20401a5c:	00f61463          	bne	a2,a5,20401a64 <memcpy+0xc>
+		*(d_byte++) = *(s_byte++);
+		n--;
+	}
+
+	return d;
+}
+20401a60:	00008067          	ret
+		*(d_byte++) = *(s_byte++);
+20401a64:	00f586b3          	add	a3,a1,a5
+20401a68:	0006c683          	lbu	a3,0(a3)
+20401a6c:	00f50733          	add	a4,a0,a5
+20401a70:	00178793          	addi	a5,a5,1
+20401a74:	00d70023          	sb	a3,0(a4)
+		n--;
+20401a78:	fe5ff06f          	j	20401a5c <memcpy+0x4>
+
+20401a7c <memset>:
+void *memset(void *buf, int c, size_t n)
+{
+	/* do byte-sized initialization until word-aligned or finished */
+
+	unsigned char *d_byte = (unsigned char *)buf;
+	unsigned char c_byte = (unsigned char)c;
+20401a7c:	0ff5f593          	andi	a1,a1,255
+	/* do byte-sized initialization until finished */
+
+	d_byte = (unsigned char *)d_word;
+#endif
+
+	while (n > 0) {
+20401a80:	00c50633          	add	a2,a0,a2
+	unsigned char *d_byte = (unsigned char *)buf;
+20401a84:	00050793          	mv	a5,a0
+	while (n > 0) {
+20401a88:	00c79463          	bne	a5,a2,20401a90 <memset+0x14>
+		*(d_byte++) = c_byte;
+		n--;
+	}
+
+	return buf;
+}
+20401a8c:	00008067          	ret
+		*(d_byte++) = c_byte;
+20401a90:	00178793          	addi	a5,a5,1
+20401a94:	feb78fa3          	sb	a1,-1(a5)
+		n--;
+20401a98:	ff1ff06f          	j	20401a88 <memset+0xc>
+
+20401a9c <plic_init>:
+ *
+ * @brief Initialize the Platform Level Interrupt Controller
+ * @return N/A
+ */
+static int plic_init(const struct device *dev)
+{
+20401a9c:	ff010113          	addi	sp,sp,-16
+	    (volatile struct plic_regs_t *)PLIC_REG;
+	int i;
+
+	/* Ensure that all interrupts are disabled initially */
+	for (i = 0; i < PLIC_EN_SIZE; i++) {
+		*en = 0U;
+20401aa0:	0c0027b7          	lui	a5,0xc002
+{
+20401aa4:	00112623          	sw	ra,12(sp)
+		*en = 0U;
+20401aa8:	0007a023          	sw	zero,0(a5) # c002000 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xbffa000>
+20401aac:	0007a223          	sw	zero,4(a5)
+	volatile uint32_t *prio = (volatile uint32_t *)PLIC_PRIO;
+20401ab0:	0c0007b7          	lui	a5,0xc000
+		en++;
+	}
+
+	/* Set priority of each interrupt line to 0 initially */
+	for (i = 0; i < PLIC_IRQS; i++) {
+20401ab4:	0d078713          	addi	a4,a5,208 # c0000d0 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xbff80d0>
+		*prio = 0U;
+20401ab8:	0007a023          	sw	zero,0(a5)
+		prio++;
+20401abc:	00478793          	addi	a5,a5,4
+	for (i = 0; i < PLIC_IRQS; i++) {
+20401ac0:	fee79ce3          	bne	a5,a4,20401ab8 <plic_init+0x1c>
+	}
+
+	/* Set threshold priority to 0 */
+	regs->threshold_prio = 0U;
+20401ac4:	0c2007b7          	lui	a5,0xc200
+20401ac8:	0007a023          	sw	zero,0(a5) # c200000 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xc1f8000>
+
+	/* Setup IRQ handler for PLIC driver */
+	IRQ_CONNECT(RISCV_MACHINE_EXT_IRQ,
+20401acc:	00000593          	li	a1,0
+20401ad0:	00b00513          	li	a0,11
+20401ad4:	e3dff0ef          	jal	ra,20401910 <arch_irq_priority_set>
+		    plic_irq_handler,
+		    NULL,
+		    0);
+
+	/* Enable IRQ for PLIC driver */
+	irq_enable(RISCV_MACHINE_EXT_IRQ);
+20401ad8:	00b00513          	li	a0,11
+20401adc:	e11ff0ef          	jal	ra,204018ec <arch_irq_enable>
+
+	return 0;
+}
+20401ae0:	00c12083          	lw	ra,12(sp)
+20401ae4:	00000513          	li	a0,0
+20401ae8:	01010113          	addi	sp,sp,16
+20401aec:	00008067          	ret
+
+20401af0 <plic_irq_handler>:
+{
+20401af0:	ff010113          	addi	sp,sp,-16
+	irq = regs->claim_complete;
+20401af4:	0c2007b7          	lui	a5,0xc200
+{
+20401af8:	00812423          	sw	s0,8(sp)
+	irq = regs->claim_complete;
+20401afc:	0047a403          	lw	s0,4(a5) # c200004 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xc1f8004>
+	save_irq = irq;
+20401b00:	800007b7          	lui	a5,0x80000
+{
+20401b04:	00912223          	sw	s1,4(sp)
+20401b08:	00112623          	sw	ra,12(sp)
+	save_irq = irq;
+20401b0c:	0087a823          	sw	s0,16(a5) # 80000010 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000011>
+	if (irq == 0U || irq >= PLIC_IRQS)
+20401b10:	fff40693          	addi	a3,s0,-1
+20401b14:	03200713          	li	a4,50
+20401b18:	01078493          	addi	s1,a5,16
+20401b1c:	00d77663          	bgeu	a4,a3,20401b28 <plic_irq_handler+0x38>
+		z_irq_spurious(NULL);
+20401b20:	00000513          	li	a0,0
+20401b24:	e59ff0ef          	jal	ra,2040197c <z_irq_spurious>
+	irq += CONFIG_2ND_LVL_ISR_TBL_OFFSET;
+20401b28:	00c40413          	addi	s0,s0,12
+	ite->isr(ite->arg);
+20401b2c:	204037b7          	lui	a5,0x20403
+20401b30:	de478793          	addi	a5,a5,-540 # 20402de4 <_sw_isr_table>
+20401b34:	00341413          	slli	s0,s0,0x3
+20401b38:	00878433          	add	s0,a5,s0
+20401b3c:	00442783          	lw	a5,4(s0)
+20401b40:	00042503          	lw	a0,0(s0)
+20401b44:	000780e7          	jalr	a5
+	regs->claim_complete = save_irq;
+20401b48:	0004a703          	lw	a4,0(s1)
+}
+20401b4c:	00c12083          	lw	ra,12(sp)
+20401b50:	00812403          	lw	s0,8(sp)
+	regs->claim_complete = save_irq;
+20401b54:	0c2007b7          	lui	a5,0xc200
+20401b58:	00e7a223          	sw	a4,4(a5) # c200004 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xc1f8004>
+}
+20401b5c:	00412483          	lw	s1,4(sp)
+20401b60:	01010113          	addi	sp,sp,16
+20401b64:	00008067          	ret
+
+20401b68 <riscv_plic_irq_enable>:
+20401b68:	00800793          	li	a5,8
+20401b6c:	3007b7f3          	csrrc	a5,mstatus,a5
+	en += (irq >> 5);
+20401b70:	00555693          	srli	a3,a0,0x5
+20401b74:	00269713          	slli	a4,a3,0x2
+20401b78:	0c0026b7          	lui	a3,0xc002
+20401b7c:	00e686b3          	add	a3,a3,a4
+	*en |= (1 << (irq & 31));
+20401b80:	0006a603          	lw	a2,0(a3) # c002000 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0xbffa000>
+20401b84:	00100713          	li	a4,1
+20401b88:	00a71533          	sll	a0,a4,a0
+20401b8c:	00c56533          	or	a0,a0,a2
+20401b90:	00a6a023          	sw	a0,0(a3)
+	key = (mstatus & MSTATUS_IEN);
+20401b94:	0087f793          	andi	a5,a5,8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20401b98:	3007a7f3          	csrrs	a5,mstatus,a5
+}
+20401b9c:	00008067          	ret
+
+20401ba0 <riscv_plic_set_priority>:
+	if (priority > PLIC_MAX_PRIO)
+20401ba0:	00700793          	li	a5,7
+20401ba4:	00b7f463          	bgeu	a5,a1,20401bac <riscv_plic_set_priority+0xc>
+20401ba8:	00700593          	li	a1,7
+	prio += irq;
+20401bac:	00251513          	slli	a0,a0,0x2
+20401bb0:	0c0007b7          	lui	a5,0xc000
+20401bb4:	00a78533          	add	a0,a5,a0
+	*prio = priority;
+20401bb8:	00b52023          	sw	a1,0(a0)
+}
+20401bbc:	00008067          	ret
+
+20401bc0 <mtime>:
+	volatile uint32_t *r = (uint32_t *)RISCV_MTIME_BASE;
+	uint32_t lo, hi;
+
+	/* Likewise, must guard against rollover when reading */
+	do {
+		hi = r[1];
+20401bc0:	0200c7b7          	lui	a5,0x200c
+20401bc4:	ffc7a703          	lw	a4,-4(a5) # 200bffc <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x2003ffc>
+		lo = r[0];
+20401bc8:	ff87a503          	lw	a0,-8(a5)
+	} while (r[1] != hi);
+20401bcc:	ffc7a583          	lw	a1,-4(a5)
+20401bd0:	fee59ae3          	bne	a1,a4,20401bc4 <mtime+0x4>
+
+	return (((uint64_t)hi) << 32) | lo;
+#endif
+}
+20401bd4:	00008067          	ret
+
+20401bd8 <timer_isr>:
+
+static void timer_isr(const void *arg)
+{
+20401bd8:	ff010113          	addi	sp,sp,-16
+20401bdc:	00812423          	sw	s0,8(sp)
+20401be0:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401be4:	00800413          	li	s0,8
+20401be8:	30043473          	csrrc	s0,mstatus,s0
+	ARG_UNUSED(arg);
+
+	k_spinlock_key_t key = k_spin_lock(&lock);
+	uint64_t now = mtime();
+20401bec:	fd5ff0ef          	jal	ra,20401bc0 <mtime>
+	uint32_t dticks = (uint32_t)((now - last_count) / CYC_PER_TICK);
+20401bf0:	800006b7          	lui	a3,0x80000
+20401bf4:	00068693          	mv	a3,a3
+20401bf8:	0006a783          	lw	a5,0(a3) # 80000000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000001>
+20401bfc:	0046a703          	lw	a4,4(a3)
+	uint64_t now = mtime();
+20401c00:	00050613          	mv	a2,a0
+	uint32_t dticks = (uint32_t)((now - last_count) / CYC_PER_TICK);
+20401c04:	40f507b3          	sub	a5,a0,a5
+20401c08:	00f53533          	sltu	a0,a0,a5
+20401c0c:	40e58733          	sub	a4,a1,a4
+20401c10:	40a70733          	sub	a4,a4,a0
+20401c14:	01871713          	slli	a4,a4,0x18
+20401c18:	0087d513          	srli	a0,a5,0x8
+20401c1c:	00a76533          	or	a0,a4,a0
+
+	last_count = now;
+20401c20:	00c6a023          	sw	a2,0(a3)
+20401c24:	00b6a223          	sw	a1,4(a3)
+	key = (mstatus & MSTATUS_IEN);
+20401c28:	00847413          	andi	s0,s0,8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20401c2c:	30042473          	csrrs	s0,mstatus,s0
+		set_mtimecmp(next);
+	}
+
+	k_spin_unlock(&lock, key);
+	sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ? dticks : 1);
+}
+20401c30:	00812403          	lw	s0,8(sp)
+20401c34:	00c12083          	lw	ra,12(sp)
+20401c38:	01010113          	addi	sp,sp,16
+	sys_clock_announce(IS_ENABLED(CONFIG_TICKLESS_KERNEL) ? dticks : 1);
+20401c3c:	7b10006f          	j	20402bec <sys_clock_announce>
+
+20401c40 <sys_clock_driver_init>:
+{
+	return (mtime() << CONFIG_RISCV_MACHINE_TIMER_SYSTEM_CLOCK_DIVIDER);
+}
+
+static int sys_clock_driver_init(const struct device *dev)
+{
+20401c40:	ff010113          	addi	sp,sp,-16
+	ARG_UNUSED(dev);
+
+	IRQ_CONNECT(RISCV_MACHINE_TIMER_IRQ, 0, timer_isr, NULL, 0);
+20401c44:	00000593          	li	a1,0
+20401c48:	00700513          	li	a0,7
+{
+20401c4c:	00112623          	sw	ra,12(sp)
+	IRQ_CONNECT(RISCV_MACHINE_TIMER_IRQ, 0, timer_isr, NULL, 0);
+20401c50:	cc1ff0ef          	jal	ra,20401910 <arch_irq_priority_set>
+	last_count = mtime();
+20401c54:	f6dff0ef          	jal	ra,20401bc0 <mtime>
+20401c58:	800007b7          	lui	a5,0x80000
+20401c5c:	00078793          	mv	a5,a5
+20401c60:	00a7a023          	sw	a0,0(a5) # 80000000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000001>
+20401c64:	00b7a223          	sw	a1,4(a5)
+	set_mtimecmp(last_count + CYC_PER_TICK);
+20401c68:	10050713          	addi	a4,a0,256
+	r[1] = 0xffffffff;
+20401c6c:	020047b7          	lui	a5,0x2004
+20401c70:	fff00693          	li	a3,-1
+20401c74:	00d7a223          	sw	a3,4(a5) # 2004004 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x1ffc004>
+	set_mtimecmp(last_count + CYC_PER_TICK);
+20401c78:	00a73533          	sltu	a0,a4,a0
+20401c7c:	00b50533          	add	a0,a0,a1
+	r[0] = (uint32_t)time;
+20401c80:	00e7a023          	sw	a4,0(a5)
+	r[1] = (uint32_t)(time >> 32);
+20401c84:	00a7a223          	sw	a0,4(a5)
+	irq_enable(RISCV_MACHINE_TIMER_IRQ);
+20401c88:	00700513          	li	a0,7
+20401c8c:	c61ff0ef          	jal	ra,204018ec <arch_irq_enable>
+	return 0;
+}
+20401c90:	00c12083          	lw	ra,12(sp)
+20401c94:	00000513          	li	a0,0
+20401c98:	01010113          	addi	sp,sp,16
+20401c9c:	00008067          	ret
+
+20401ca0 <sys_clock_set_timeout>:
+	if (idle) {
+20401ca0:	0c059c63          	bnez	a1,20401d78 <sys_clock_set_timeout+0xd8>
+{
+20401ca4:	ff010113          	addi	sp,sp,-16
+20401ca8:	00112623          	sw	ra,12(sp)
+20401cac:	00812423          	sw	s0,8(sp)
+20401cb0:	00912223          	sw	s1,4(sp)
+	ticks = ticks == K_TICKS_FOREVER ? MAX_TICKS : ticks;
+20401cb4:	fff00793          	li	a5,-1
+20401cb8:	0af51463          	bne	a0,a5,20401d60 <sys_clock_set_timeout+0xc0>
+20401cbc:	00800437          	lui	s0,0x800
+20401cc0:	ffd40413          	addi	s0,s0,-3 # 7ffffd <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7f7ffd>
+	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
+20401cc4:	008007b7          	lui	a5,0x800
+20401cc8:	ffd78713          	addi	a4,a5,-3 # 7ffffd <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x7f7ffd>
+20401ccc:	0a874263          	blt	a4,s0,20401d70 <sys_clock_set_timeout+0xd0>
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401cd0:	00800493          	li	s1,8
+20401cd4:	3004b4f3          	csrrc	s1,mstatus,s1
+	uint64_t now = mtime();
+20401cd8:	ee9ff0ef          	jal	ra,20401bc0 <mtime>
+	adj = (uint32_t)(now - last_count) + (CYC_PER_TICK - 1);
+20401cdc:	800007b7          	lui	a5,0x80000
+20401ce0:	00078793          	mv	a5,a5
+20401ce4:	0007a703          	lw	a4,0(a5) # 80000000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000001>
+20401ce8:	0047a603          	lw	a2,4(a5)
+	if (cyc <= MAX_CYC - adj) {
+20401cec:	800007b7          	lui	a5,0x80000
+	adj = (uint32_t)(now - last_count) + (CYC_PER_TICK - 1);
+20401cf0:	40e506b3          	sub	a3,a0,a4
+20401cf4:	0ff68693          	addi	a3,a3,255
+	if (cyc <= MAX_CYC - adj) {
+20401cf8:	fff7c793          	not	a5,a5
+	uint32_t adj, cyc = ticks * CYC_PER_TICK;
+20401cfc:	00841413          	slli	s0,s0,0x8
+	if (cyc <= MAX_CYC - adj) {
+20401d00:	40d785b3          	sub	a1,a5,a3
+	key = (mstatus & MSTATUS_IEN);
+20401d04:	0084f493          	andi	s1,s1,8
+20401d08:	0085e463          	bltu	a1,s0,20401d10 <sys_clock_set_timeout+0x70>
+		cyc += adj;
+20401d0c:	00d407b3          	add	a5,s0,a3
+	cyc = (cyc / CYC_PER_TICK) * CYC_PER_TICK;
+20401d10:	f007f793          	andi	a5,a5,-256
+	if ((int32_t)(cyc + last_count - now) < MIN_DELAY) {
+20401d14:	40a70533          	sub	a0,a4,a0
+20401d18:	00f50533          	add	a0,a0,a5
+20401d1c:	3e700693          	li	a3,999
+20401d20:	00a6c463          	blt	a3,a0,20401d28 <sys_clock_set_timeout+0x88>
+		cyc += CYC_PER_TICK;
+20401d24:	10078793          	addi	a5,a5,256 # 80000100 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000101>
+	set_mtimecmp(cyc + last_count);
+20401d28:	00e78733          	add	a4,a5,a4
+20401d2c:	00f737b3          	sltu	a5,a4,a5
+	r[1] = 0xffffffff;
+20401d30:	020046b7          	lui	a3,0x2004
+	set_mtimecmp(cyc + last_count);
+20401d34:	00c787b3          	add	a5,a5,a2
+	r[1] = 0xffffffff;
+20401d38:	fff00613          	li	a2,-1
+20401d3c:	00c6a223          	sw	a2,4(a3) # 2004004 <CONFIG_SYS_CLOCK_HW_CYCLES_PER_SEC+0x1ffc004>
+	r[0] = (uint32_t)time;
+20401d40:	00e6a023          	sw	a4,0(a3)
+	r[1] = (uint32_t)(time >> 32);
+20401d44:	00f6a223          	sw	a5,4(a3)
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20401d48:	3004a4f3          	csrrs	s1,mstatus,s1
+}
+20401d4c:	00c12083          	lw	ra,12(sp)
+20401d50:	00812403          	lw	s0,8(sp)
+20401d54:	00412483          	lw	s1,4(sp)
+20401d58:	01010113          	addi	sp,sp,16
+20401d5c:	00008067          	ret
+	ticks = CLAMP(ticks - 1, 0, (int32_t)MAX_TICKS);
+20401d60:	fff50413          	addi	s0,a0,-1
+20401d64:	f68040e3          	bgtz	s0,20401cc4 <sys_clock_set_timeout+0x24>
+20401d68:	00000413          	li	s0,0
+20401d6c:	f65ff06f          	j	20401cd0 <sys_clock_set_timeout+0x30>
+20401d70:	ffe78413          	addi	s0,a5,-2
+20401d74:	f5dff06f          	j	20401cd0 <sys_clock_set_timeout+0x30>
+20401d78:	00008067          	ret
+
+20401d7c <sys_clock_elapsed>:
+{
+20401d7c:	ff010113          	addi	sp,sp,-16
+20401d80:	00812423          	sw	s0,8(sp)
+20401d84:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401d88:	00800413          	li	s0,8
+20401d8c:	30043473          	csrrc	s0,mstatus,s0
+	uint32_t ret = ((uint32_t)mtime() - (uint32_t)last_count) / CYC_PER_TICK;
+20401d90:	e31ff0ef          	jal	ra,20401bc0 <mtime>
+20401d94:	800007b7          	lui	a5,0x80000
+20401d98:	0007a783          	lw	a5,0(a5) # 80000000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000001>
+	key = (mstatus & MSTATUS_IEN);
+20401d9c:	00847413          	andi	s0,s0,8
+20401da0:	40f50533          	sub	a0,a0,a5
+20401da4:	00855513          	srli	a0,a0,0x8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20401da8:	30042473          	csrrs	s0,mstatus,s0
+}
+20401dac:	00c12083          	lw	ra,12(sp)
+20401db0:	00812403          	lw	s0,8(sp)
+20401db4:	01010113          	addi	sp,sp,16
+20401db8:	00008067          	ret
+
+20401dbc <arch_system_halt>:
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401dbc:	00800793          	li	a5,8
+20401dc0:	3007b7f3          	csrrc	a5,mstatus,a5
+	/* TODO: What's the best way to totally halt the system if SMP
+	 * is enabled?
+	 */
+
+	(void)arch_irq_lock();
+	for (;;) {
+20401dc4:	0000006f          	j	20401dc4 <arch_system_halt+0x8>
+
+20401dc8 <k_sys_fatal_error_handler>:
+/* LCOV_EXCL_STOP */
+
+/* LCOV_EXCL_START */
+__weak void k_sys_fatal_error_handler(unsigned int reason,
+				      const z_arch_esf_t *esf)
+{
+20401dc8:	ff010113          	addi	sp,sp,-16
+20401dcc:	00112623          	sw	ra,12(sp)
+	ARG_UNUSED(esf);
+
+	LOG_PANIC();
+	LOG_ERR("Halting system");
+	arch_system_halt(reason);
+20401dd0:	fedff0ef          	jal	ra,20401dbc <arch_system_halt>
+
+20401dd4 <z_fatal_error>:
+	return 0;
+#endif
+}
+
+void z_fatal_error(unsigned int reason, const z_arch_esf_t *esf)
+{
+20401dd4:	fe010113          	addi	sp,sp,-32
+20401dd8:	00812c23          	sw	s0,24(sp)
+20401ddc:	01212823          	sw	s2,16(sp)
+20401de0:	00112e23          	sw	ra,28(sp)
+20401de4:	00912a23          	sw	s1,20(sp)
+20401de8:	00050913          	mv	s2,a0
+20401dec:	00b12623          	sw	a1,12(sp)
+20401df0:	00800413          	li	s0,8
+20401df4:	30043473          	csrrc	s0,mstatus,s0
+	return z_impl_z_current_get();
+20401df8:	18d000ef          	jal	ra,20402784 <z_impl_z_current_get>
+	LOG_ERR("Current thread: %p (%s)", thread,
+		log_strdup(thread_name_get(thread)));
+
+	coredump(reason, esf, thread);
+
+	k_sys_fatal_error_handler(reason, esf);
+20401dfc:	00c12583          	lw	a1,12(sp)
+20401e00:	00050493          	mv	s1,a0
+20401e04:	00090513          	mv	a0,s2
+20401e08:	fc1ff0ef          	jal	ra,20401dc8 <k_sys_fatal_error_handler>
+	key = (mstatus & MSTATUS_IEN);
+20401e0c:	00847413          	andi	s0,s0,8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20401e10:	30042473          	csrrs	s0,mstatus,s0
+	arch_irq_unlock(key);
+
+	if (IS_ENABLED(CONFIG_MULTITHREADING)) {
+		k_thread_abort(thread);
+	}
+}
+20401e14:	01812403          	lw	s0,24(sp)
+20401e18:	01c12083          	lw	ra,28(sp)
+20401e1c:	01012903          	lw	s2,16(sp)
+	z_impl_k_thread_abort(thread);
+20401e20:	00048513          	mv	a0,s1
+20401e24:	01412483          	lw	s1,20(sp)
+20401e28:	02010113          	addi	sp,sp,32
+20401e2c:	2590006f          	j	20402884 <z_impl_k_thread_abort>
+
+20401e30 <init_idle_thread>:
+#else
+	char *tname = NULL;
+#endif /* CONFIG_THREAD_NAME */
+
+	z_setup_new_thread(thread, stack,
+			  CONFIG_IDLE_STACK_SIZE, idle, &_kernel.cpus[i],
+20401e30:	01800693          	li	a3,24
+20401e34:	02d506b3          	mul	a3,a0,a3
+{
+20401e38:	fe010113          	addi	sp,sp,-32
+20401e3c:	00812c23          	sw	s0,24(sp)
+	z_setup_new_thread(thread, stack,
+20401e40:	80000737          	lui	a4,0x80000
+	struct k_thread *thread = &z_idle_threads[i];
+20401e44:	80000437          	lui	s0,0x80000
+	k_thread_stack_t *stack = z_idle_stacks[i];
+20401e48:	00951313          	slli	t1,a0,0x9
+	struct k_thread *thread = &z_idle_threads[i];
+20401e4c:	02840413          	addi	s0,s0,40 # 80000028 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000029>
+20401e50:	00751513          	slli	a0,a0,0x7
+	z_setup_new_thread(thread, stack,
+20401e54:	12870713          	addi	a4,a4,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+20401e58:	800005b7          	lui	a1,0x80000
+	struct k_thread *thread = &z_idle_threads[i];
+20401e5c:	00a40433          	add	s0,s0,a0
+	z_setup_new_thread(thread, stack,
+20401e60:	00100793          	li	a5,1
+20401e64:	00d70733          	add	a4,a4,a3
+20401e68:	55058593          	addi	a1,a1,1360 # 80000550 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000551>
+20401e6c:	204026b7          	lui	a3,0x20402
+20401e70:	00f12023          	sw	a5,0(sp)
+20401e74:	00012223          	sw	zero,4(sp)
+20401e78:	00000793          	li	a5,0
+20401e7c:	00040513          	mv	a0,s0
+20401e80:	00f00893          	li	a7,15
+20401e84:	00000813          	li	a6,0
+20401e88:	1ac68693          	addi	a3,a3,428 # 204021ac <idle>
+20401e8c:	20000613          	li	a2,512
+20401e90:	006585b3          	add	a1,a1,t1
+{
+20401e94:	00112e23          	sw	ra,28(sp)
+	z_setup_new_thread(thread, stack,
+20401e98:	168000ef          	jal	ra,20402000 <z_setup_new_thread>
+	SYS_PORT_TRACING_FUNC(k_thread, sched_resume, thread);
+}
+
+static inline void z_mark_thread_as_started(struct k_thread *thread)
+{
+	thread->base.thread_state &= ~_THREAD_PRESTART;
+20401e9c:	00d44783          	lbu	a5,13(s0)
+	z_mark_thread_as_started(thread);
+
+#ifdef CONFIG_SMP
+	thread->base.is_idle = 1U;
+#endif
+}
+20401ea0:	01c12083          	lw	ra,28(sp)
+20401ea4:	ffb7f793          	andi	a5,a5,-5
+20401ea8:	00f406a3          	sb	a5,13(s0)
+20401eac:	01812403          	lw	s0,24(sp)
+20401eb0:	02010113          	addi	sp,sp,32
+20401eb4:	00008067          	ret
+
+20401eb8 <bg_thread_main>:
+{
+20401eb8:	ff010113          	addi	sp,sp,-16
+	z_sys_post_kernel = true;
+20401ebc:	800007b7          	lui	a5,0x80000
+20401ec0:	00100713          	li	a4,1
+	z_sys_init_run_level(_SYS_INIT_LEVEL_POST_KERNEL);
+20401ec4:	00200513          	li	a0,2
+{
+20401ec8:	00112623          	sw	ra,12(sp)
+	z_sys_post_kernel = true;
+20401ecc:	02e78023          	sb	a4,32(a5) # 80000020 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000021>
+	z_sys_init_run_level(_SYS_INIT_LEVEL_POST_KERNEL);
+20401ed0:	65d000ef          	jal	ra,20402d2c <z_sys_init_run_level>
+	boot_banner();
+20401ed4:	651000ef          	jal	ra,20402d24 <boot_banner>
+	z_sys_init_run_level(_SYS_INIT_LEVEL_APPLICATION);
+20401ed8:	00300513          	li	a0,3
+20401edc:	651000ef          	jal	ra,20402d2c <z_sys_init_run_level>
+	z_init_static_threads();
+20401ee0:	1a4000ef          	jal	ra,20402084 <z_init_static_threads>
+	main();
+20401ee4:	c3dfe0ef          	jal	ra,20400b20 <main>
+	z_main_thread.base.user_options &= ~K_ESSENTIAL;
+20401ee8:	800007b7          	lui	a5,0x80000
+20401eec:	0a878793          	addi	a5,a5,168 # 800000a8 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x800000a9>
+20401ef0:	00c7c703          	lbu	a4,12(a5)
+20401ef4:	ffe77713          	andi	a4,a4,-2
+20401ef8:	00e78623          	sb	a4,12(a5)
+} /* LCOV_EXCL_LINE ... because we just dumped final coverage data */
+20401efc:	00c12083          	lw	ra,12(sp)
+20401f00:	01010113          	addi	sp,sp,16
+20401f04:	00008067          	ret
+
+20401f08 <z_bss_zero>:
+	(void)memset(__bss_start, 0, __bss_end - __bss_start);
+20401f08:	80000537          	lui	a0,0x80000
+20401f0c:	800007b7          	lui	a5,0x80000
+20401f10:	00050613          	mv	a2,a0
+20401f14:	14c78793          	addi	a5,a5,332 # 8000014c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x8000014d>
+20401f18:	40c78633          	sub	a2,a5,a2
+20401f1c:	00000593          	li	a1,0
+20401f20:	00050513          	mv	a0,a0
+20401f24:	b59ff06f          	j	20401a7c <memset>
+
+20401f28 <z_cstart>:
+ *
+ * @return Does not return
+ */
+__boot_func
+FUNC_NORETURN void z_cstart(void)
+{
+20401f28:	f6010113          	addi	sp,sp,-160
+20401f2c:	08812c23          	sw	s0,152(sp)
+{
+	dummy_thread->base.thread_state = _THREAD_DUMMY;
+#ifdef CONFIG_SCHED_CPU_MASK
+	dummy_thread->base.cpu_mask = -1;
+#endif
+	dummy_thread->base.user_options = K_ESSENTIAL;
+20401f30:	10100793          	li	a5,257
+#endif
+#ifdef CONFIG_USERSPACE
+	dummy_thread->mem_domain_info.mem_domain = &k_mem_domain_default;
+#endif
+
+	_current_cpu->current = dummy_thread;
+20401f34:	80000437          	lui	s0,0x80000
+20401f38:	12840413          	addi	s0,s0,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+	dummy_thread->base.user_options = K_ESSENTIAL;
+20401f3c:	00f11e23          	sh	a5,28(sp)
+	_current_cpu->current = dummy_thread;
+20401f40:	01010793          	addi	a5,sp,16
+20401f44:	08112e23          	sw	ra,156(sp)
+20401f48:	00f42423          	sw	a5,8(s0)
+20401f4c:	08912a23          	sw	s1,148(sp)
+20401f50:	09212823          	sw	s2,144(sp)
+	struct k_thread dummy_thread;
+
+	z_dummy_thread_init(&dummy_thread);
+#endif
+	/* do any necessary initialization of static devices */
+	z_device_state_init();
+20401f54:	5d5000ef          	jal	ra,20402d28 <z_device_state_init>
+
+	/* perform basic hardware initialization */
+	z_sys_init_run_level(_SYS_INIT_LEVEL_PRE_KERNEL_1);
+20401f58:	00000513          	li	a0,0
+20401f5c:	5d1000ef          	jal	ra,20402d2c <z_sys_init_run_level>
+	z_sys_init_run_level(_SYS_INIT_LEVEL_PRE_KERNEL_2);
+20401f60:	00100513          	li	a0,1
+20401f64:	5c9000ef          	jal	ra,20402d2c <z_sys_init_run_level>
+	z_sched_init();
+20401f68:	7f8000ef          	jal	ra,20402760 <z_sched_init>
+	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
+20401f6c:	204037b7          	lui	a5,0x20403
+20401f70:	20878793          	addi	a5,a5,520 # 20403208 <__clz_tab+0x220>
+	_kernel.ready_q.cache = &z_main_thread;
+20401f74:	800004b7          	lui	s1,0x80000
+	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
+20401f78:	00f12223          	sw	a5,4(sp)
+20401f7c:	204026b7          	lui	a3,0x20402
+20401f80:	00100793          	li	a5,1
+20401f84:	800005b7          	lui	a1,0x80000
+	_kernel.ready_q.cache = &z_main_thread;
+20401f88:	0a848913          	addi	s2,s1,168 # 800000a8 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x800000a9>
+	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
+20401f8c:	00000893          	li	a7,0
+20401f90:	00000813          	li	a6,0
+20401f94:	00000713          	li	a4,0
+20401f98:	eb868693          	addi	a3,a3,-328 # 20401eb8 <bg_thread_main>
+20401f9c:	40000613          	li	a2,1024
+20401fa0:	15058593          	addi	a1,a1,336 # 80000150 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000151>
+20401fa4:	00f12023          	sw	a5,0(sp)
+20401fa8:	0a848513          	addi	a0,s1,168
+20401fac:	00000793          	li	a5,0
+	_kernel.ready_q.cache = &z_main_thread;
+20401fb0:	01242c23          	sw	s2,24(s0)
+	stack_ptr = z_setup_new_thread(&z_main_thread, z_main_stack,
+20401fb4:	04c000ef          	jal	ra,20402000 <z_setup_new_thread>
+20401fb8:	00d94783          	lbu	a5,13(s2)
+	z_ready_thread(&z_main_thread);
+20401fbc:	0a848513          	addi	a0,s1,168
+20401fc0:	ffb7f793          	andi	a5,a5,-5
+20401fc4:	00f906a3          	sb	a5,13(s2)
+20401fc8:	664000ef          	jal	ra,2040262c <z_ready_thread>
+		init_idle_thread(i);
+20401fcc:	00000513          	li	a0,0
+20401fd0:	e61ff0ef          	jal	ra,20401e30 <init_idle_thread>
+		_kernel.cpus[i].idle_thread = &z_idle_threads[i];
+20401fd4:	800007b7          	lui	a5,0x80000
+20401fd8:	02878793          	addi	a5,a5,40 # 80000028 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000029>
+20401fdc:	00f42623          	sw	a5,12(s0)
+		_kernel.cpus[i].irq_stack =
+20401fe0:	800017b7          	lui	a5,0x80001
+20401fe4:	f5078793          	addi	a5,a5,-176 # 80000f50 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f51>
+		_kernel.cpus[i].id = i;
+20401fe8:	00040a23          	sb	zero,20(s0)
+		_kernel.cpus[i].irq_stack =
+20401fec:	00f42223          	sw	a5,4(s0)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20401ff0:	00800513          	li	a0,8
+20401ff4:	30053573          	csrrc	a0,mstatus,a0
+	ret = arch_swap(key);
+20401ff8:	00857513          	andi	a0,a0,8
+20401ffc:	ac4fe0ef          	jal	ra,204002c0 <arch_swap>
+
+20402000 <z_setup_new_thread>:
+char *z_setup_new_thread(struct k_thread *new_thread,
+			 k_thread_stack_t *stack, size_t stack_size,
+			 k_thread_entry_t entry,
+			 void *p1, void *p2, void *p3,
+			 int prio, uint32_t options, const char *name)
+{
+20402000:	ff010113          	addi	sp,sp,-16
+20402004:	00812423          	sw	s0,8(sp)
+20402008:	00912223          	sw	s1,4(sp)
+2040200c:	00112623          	sw	ra,12(sp)
+	SYS_DLIST_FOR_EACH_CONTAINER(&((wq)->waitq), thread_ptr, \
+				     base.qnode_dlist)
+
+static inline void z_waitq_init(_wait_q_t *w)
+{
+	sys_dlist_init(&w->waitq);
+20402010:	06850313          	addi	t1,a0,104 # 80000068 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000069>
+ * @return N/A
+ */
+
+static inline void sys_dlist_init(sys_dlist_t *list)
+{
+	list->head = (sys_dnode_t *)list;
+20402014:	06652423          	sw	t1,104(a0)
+	list->tail = (sys_dnode_t *)list;
+20402018:	06652623          	sw	t1,108(a0)
+void z_init_thread_base(struct _thread_base *thread_base, int priority,
+		       uint32_t initial_state, unsigned int options)
+{
+	/* k_q_node is initialized upon first insertion in a list */
+	thread_base->pended_on = NULL;
+	thread_base->user_options = (uint8_t)options;
+2040201c:	01012303          	lw	t1,16(sp)
+		stack_obj_size = Z_KERNEL_STACK_SIZE_ADJUST(stack_size);
+20402020:	00f60613          	addi	a2,a2,15
+20402024:	ff067613          	andi	a2,a2,-16
+	stack_ptr = (char *)stack + stack_obj_size;
+20402028:	00c584b3          	add	s1,a1,a2
+	thread_base->user_options = (uint8_t)options;
+2040202c:	00650623          	sb	t1,12(a0)
+	thread_base->thread_state = (uint8_t)initial_state;
+20402030:	00400313          	li	t1,4
+	thread_base->pended_on = NULL;
+20402034:	00052423          	sw	zero,8(a0)
+	thread_base->thread_state = (uint8_t)initial_state;
+20402038:	006506a3          	sb	t1,13(a0)
+
+	thread_base->prio = priority;
+2040203c:	01150723          	sb	a7,14(a0)
+
+	thread_base->sched_locked = 0U;
+20402040:	000507a3          	sb	zero,15(a0)
+ * @return N/A
+ */
+
+static inline void sys_dnode_init(sys_dnode_t *node)
+{
+	node->next = NULL;
+20402044:	00052c23          	sw	zero,24(a0)
+	node->prev = NULL;
+20402048:	00052e23          	sw	zero,28(a0)
+	arch_new_thread(new_thread, stack, stack_ptr, entry, p1, p2, p3);
+2040204c:	00048613          	mv	a2,s1
+{
+20402050:	00050413          	mv	s0,a0
+	arch_new_thread(new_thread, stack, stack_ptr, entry, p1, p2, p3);
+20402054:	989ff0ef          	jal	ra,204019dc <arch_new_thread>
+	new_thread->resource_pool = _current->resource_pool;
+20402058:	800007b7          	lui	a5,0x80000
+2040205c:	1307a783          	lw	a5,304(a5) # 80000130 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000131>
+}
+20402060:	00c12083          	lw	ra,12(sp)
+	new_thread->init_data = NULL;
+20402064:	06042223          	sw	zero,100(s0)
+	new_thread->resource_pool = _current->resource_pool;
+20402068:	0747a783          	lw	a5,116(a5)
+}
+2040206c:	00048513          	mv	a0,s1
+20402070:	00412483          	lw	s1,4(sp)
+	new_thread->resource_pool = _current->resource_pool;
+20402074:	06f42a23          	sw	a5,116(s0)
+}
+20402078:	00812403          	lw	s0,8(sp)
+2040207c:	01010113          	addi	sp,sp,16
+20402080:	00008067          	ret
+
+20402084 <z_init_static_threads>:
+{
+20402084:	fd010113          	addi	sp,sp,-48
+	_FOREACH_STATIC_THREAD(thread_data) {
+20402088:	800017b7          	lui	a5,0x80001
+{
+2040208c:	03212023          	sw	s2,32(sp)
+	_FOREACH_STATIC_THREAD(thread_data) {
+20402090:	80001937          	lui	s2,0x80001
+{
+20402094:	02812423          	sw	s0,40(sp)
+20402098:	02912223          	sw	s1,36(sp)
+2040209c:	02112623          	sw	ra,44(sp)
+204020a0:	01312e23          	sw	s3,28(sp)
+204020a4:	01412c23          	sw	s4,24(sp)
+204020a8:	01512a23          	sw	s5,20(sp)
+	_FOREACH_STATIC_THREAD(thread_data) {
+204020ac:	f5c78413          	addi	s0,a5,-164 # 80000f5c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f5d>
+204020b0:	f5c78493          	addi	s1,a5,-164
+204020b4:	f5c90913          	addi	s2,s2,-164 # 80000f5c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f5d>
+204020b8:	05246063          	bltu	s0,s2,204020f8 <z_init_static_threads+0x74>
+	_FOREACH_STATIC_THREAD(thread_data) {
+204020bc:	00048413          	mv	s0,s1
+	k_sched_lock();
+204020c0:	2ac000ef          	jal	ra,2040236c <k_sched_lock>
+		if (thread_data->init_delay != K_TICKS_FOREVER) {
+204020c4:	fff00493          	li	s1,-1
+		}
+	} else {
+		if (result32) {
+			return (uint32_t)((t * to_hz + off) / from_hz);
+		} else {
+			return (t * to_hz + off) / from_hz;
+204020c8:	3e700993          	li	s3,999
+
+extern void z_thread_timeout(struct _timeout *timeout);
+
+static inline void z_add_thread_timeout(struct k_thread *thread, k_timeout_t ticks)
+{
+	z_add_timeout(&thread->base.timeout, z_thread_timeout, ticks);
+204020cc:	20402a37          	lui	s4,0x20402
+	_FOREACH_STATIC_THREAD(thread_data) {
+204020d0:	07246663          	bltu	s0,s2,2040213c <z_init_static_threads+0xb8>
+}
+204020d4:	02812403          	lw	s0,40(sp)
+204020d8:	02c12083          	lw	ra,44(sp)
+204020dc:	02412483          	lw	s1,36(sp)
+204020e0:	02012903          	lw	s2,32(sp)
+204020e4:	01c12983          	lw	s3,28(sp)
+204020e8:	01812a03          	lw	s4,24(sp)
+204020ec:	01412a83          	lw	s5,20(sp)
+204020f0:	03010113          	addi	sp,sp,48
+	k_sched_unlock();
+204020f4:	6240006f          	j	20402718 <k_sched_unlock>
+		z_setup_new_thread(
+204020f8:	02c42783          	lw	a5,44(s0)
+204020fc:	00f12223          	sw	a5,4(sp)
+20402100:	02042783          	lw	a5,32(s0)
+20402104:	00f12023          	sw	a5,0(sp)
+20402108:	01442783          	lw	a5,20(s0)
+2040210c:	01c42883          	lw	a7,28(s0)
+20402110:	01842803          	lw	a6,24(s0)
+20402114:	01042703          	lw	a4,16(s0)
+20402118:	00c42683          	lw	a3,12(s0)
+2040211c:	00842603          	lw	a2,8(s0)
+20402120:	00442583          	lw	a1,4(s0)
+20402124:	00042503          	lw	a0,0(s0)
+20402128:	ed9ff0ef          	jal	ra,20402000 <z_setup_new_thread>
+		thread_data->init_thread->init_data = thread_data;
+2040212c:	00042783          	lw	a5,0(s0)
+20402130:	0687a223          	sw	s0,100(a5)
+	_FOREACH_STATIC_THREAD(thread_data) {
+20402134:	03040413          	addi	s0,s0,48
+20402138:	f81ff06f          	j	204020b8 <z_init_static_threads+0x34>
+		if (thread_data->init_delay != K_TICKS_FOREVER) {
+2040213c:	02442783          	lw	a5,36(s0)
+20402140:	04978063          	beq	a5,s1,20402180 <z_init_static_threads+0xfc>
+			schedule_new_thread(thread_data->init_thread,
+20402144:	00042a83          	lw	s5,0(s0)
+					    K_MSEC(thread_data->init_delay));
+20402148:	0007d463          	bgez	a5,20402150 <z_init_static_threads+0xcc>
+2040214c:	00000793          	li	a5,0
+20402150:	41f7d593          	srai	a1,a5,0x1f
+20402154:	0197d713          	srli	a4,a5,0x19
+20402158:	00779793          	slli	a5,a5,0x7
+2040215c:	00759593          	slli	a1,a1,0x7
+20402160:	3e778513          	addi	a0,a5,999
+20402164:	00b765b3          	or	a1,a4,a1
+20402168:	00f537b3          	sltu	a5,a0,a5
+2040216c:	00b785b3          	add	a1,a5,a1
+	if (K_TIMEOUT_EQ(delay, K_NO_WAIT)) {
+20402170:	01351c63          	bne	a0,s3,20402188 <z_init_static_threads+0x104>
+20402174:	00059a63          	bnez	a1,20402188 <z_init_static_threads+0x104>
+	z_sched_start(thread);
+20402178:	000a8513          	mv	a0,s5
+2040217c:	4e0000ef          	jal	ra,2040265c <z_sched_start>
+	_FOREACH_STATIC_THREAD(thread_data) {
+20402180:	03040413          	addi	s0,s0,48
+20402184:	f4dff06f          	j	204020d0 <z_init_static_threads+0x4c>
+20402188:	3e800613          	li	a2,1000
+2040218c:	00000693          	li	a3,0
+20402190:	954fe0ef          	jal	ra,204002e4 <__udivdi3>
+20402194:	00050613          	mv	a2,a0
+20402198:	00058693          	mv	a3,a1
+2040219c:	018a8513          	addi	a0,s5,24
+204021a0:	6aca0593          	addi	a1,s4,1708 # 204026ac <z_thread_timeout>
+204021a4:	001000ef          	jal	ra,204029a4 <z_add_timeout>
+204021a8:	fd9ff06f          	j	20402180 <z_init_static_threads+0xfc>
+
+204021ac <idle>:
+#endif	/* CONFIG_PM */
+	sys_clock_idle_exit();
+}
+
+void idle(void *unused1, void *unused2, void *unused3)
+{
+204021ac:	ff010113          	addi	sp,sp,-16
+204021b0:	00812423          	sw	s0,8(sp)
+204021b4:	00112623          	sw	ra,12(sp)
+204021b8:	00800413          	li	s0,8
+204021bc:	300437f3          	csrrc	a5,mstatus,s0
+ *
+ * @return N/A
+ */
+static inline void k_cpu_idle(void)
+{
+	arch_cpu_idle();
+204021c0:	f08ff0ef          	jal	ra,204018c8 <arch_cpu_idle>
+204021c4:	ff9ff06f          	j	204021bc <idle+0x10>
+
+204021c8 <sys_dlist_remove>:
+ * @return N/A
+ */
+
+static inline void sys_dlist_remove(sys_dnode_t *node)
+{
+	sys_dnode_t *const prev = node->prev;
+204021c8:	00452703          	lw	a4,4(a0)
+	sys_dnode_t *const next = node->next;
+204021cc:	00052783          	lw	a5,0(a0)
+
+	prev->next = next;
+204021d0:	00f72023          	sw	a5,0(a4)
+	next->prev = prev;
+204021d4:	00e7a223          	sw	a4,4(a5)
+	node->next = NULL;
+204021d8:	00052023          	sw	zero,0(a0)
+	node->prev = NULL;
+204021dc:	00052223          	sw	zero,4(a0)
+	sys_dnode_init(node);
+}
+204021e0:	00008067          	ret
+
+204021e4 <unpend_thread_no_timeout>:
+	__ASSERT_NO_MSG(thread == _current || is_thread_dummy(thread));
+	pend(thread, wait_q, timeout);
+}
+
+static inline void unpend_thread_no_timeout(struct k_thread *thread)
+{
+204021e4:	ff010113          	addi	sp,sp,-16
+204021e8:	00812423          	sw	s0,8(sp)
+204021ec:	00112623          	sw	ra,12(sp)
+204021f0:	00050413          	mv	s0,a0
+
+void z_priq_dumb_remove(sys_dlist_t *pq, struct k_thread *thread)
+{
+	__ASSERT_NO_MSG(!z_is_idle_thread_object(thread));
+
+	sys_dlist_remove(&thread->base.qnode_dlist);
+204021f4:	fd5ff0ef          	jal	ra,204021c8 <sys_dlist_remove>
+	thread->base.thread_state |= _THREAD_PENDING;
+}
+
+static inline void z_mark_thread_as_not_pending(struct k_thread *thread)
+{
+	thread->base.thread_state &= ~_THREAD_PENDING;
+204021f8:	00d44783          	lbu	a5,13(s0)
+}
+204021fc:	00c12083          	lw	ra,12(sp)
+	thread->base.pended_on = NULL;
+20402200:	00042423          	sw	zero,8(s0)
+20402204:	ffd7f793          	andi	a5,a5,-3
+20402208:	00f406a3          	sb	a5,13(s0)
+}
+2040220c:	00812403          	lw	s0,8(sp)
+20402210:	01010113          	addi	sp,sp,16
+20402214:	00008067          	ret
+
+20402218 <z_reset_time_slice>:
+{
+20402218:	ff010113          	addi	sp,sp,-16
+2040221c:	00812423          	sw	s0,8(sp)
+	if (slice_time != 0) {
+20402220:	80000437          	lui	s0,0x80000
+20402224:	01840413          	addi	s0,s0,24 # 80000018 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000019>
+20402228:	00042783          	lw	a5,0(s0)
+{
+2040222c:	00112623          	sw	ra,12(sp)
+	if (slice_time != 0) {
+20402230:	02078863          	beqz	a5,20402260 <z_reset_time_slice+0x48>
+		_current_cpu->slice_ticks = slice_time + sys_clock_elapsed();
+20402234:	b49ff0ef          	jal	ra,20401d7c <sys_clock_elapsed>
+20402238:	00050793          	mv	a5,a0
+2040223c:	00042503          	lw	a0,0(s0)
+}
+20402240:	00812403          	lw	s0,8(sp)
+20402244:	00c12083          	lw	ra,12(sp)
+		_current_cpu->slice_ticks = slice_time + sys_clock_elapsed();
+20402248:	00f507b3          	add	a5,a0,a5
+2040224c:	80000737          	lui	a4,0x80000
+20402250:	12f72c23          	sw	a5,312(a4) # 80000138 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000139>
+		z_set_timeout_expiry(slice_time, false);
+20402254:	00000593          	li	a1,0
+}
+20402258:	01010113          	addi	sp,sp,16
+		z_set_timeout_expiry(slice_time, false);
+2040225c:	1390006f          	j	20402b94 <z_set_timeout_expiry>
+}
+20402260:	00c12083          	lw	ra,12(sp)
+20402264:	00812403          	lw	s0,8(sp)
+20402268:	01010113          	addi	sp,sp,16
+2040226c:	00008067          	ret
+
+20402270 <k_sched_time_slice_set>:
+{
+20402270:	ff010113          	addi	sp,sp,-16
+20402274:	00812423          	sw	s0,8(sp)
+20402278:	00912223          	sw	s1,4(sp)
+2040227c:	01212023          	sw	s2,0(sp)
+20402280:	00112623          	sw	ra,12(sp)
+20402284:	00050493          	mv	s1,a0
+20402288:	00058913          	mv	s2,a1
+2040228c:	00800413          	li	s0,8
+20402290:	30043473          	csrrc	s0,mstatus,s0
+		_current_cpu->slice_ticks = 0;
+20402294:	800007b7          	lui	a5,0x80000
+20402298:	1207ac23          	sw	zero,312(a5) # 80000138 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000139>
+			return (uint32_t)((t * to_hz + off) / from_hz);
+2040229c:	00751793          	slli	a5,a0,0x7
+204022a0:	01955593          	srli	a1,a0,0x19
+204022a4:	3e778513          	addi	a0,a5,999
+204022a8:	00f537b3          	sltu	a5,a0,a5
+204022ac:	00b785b3          	add	a1,a5,a1
+204022b0:	3e800613          	li	a2,1000
+204022b4:	00000693          	li	a3,0
+204022b8:	82cfe0ef          	jal	ra,204002e4 <__udivdi3>
+204022bc:	800007b7          	lui	a5,0x80000
+	key = (mstatus & MSTATUS_IEN);
+204022c0:	00847413          	andi	s0,s0,8
+		if (IS_ENABLED(CONFIG_TICKLESS_KERNEL) && slice > 0) {
+204022c4:	01878793          	addi	a5,a5,24 # 80000018 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000019>
+204022c8:	02904863          	bgtz	s1,204022f8 <k_sched_time_slice_set+0x88>
+			slice_time = MAX(2, slice_time);
+204022cc:	00a7a023          	sw	a0,0(a5)
+		slice_max_prio = prio;
+204022d0:	800007b7          	lui	a5,0x80000
+204022d4:	0127aa23          	sw	s2,20(a5) # 80000014 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000015>
+		z_reset_time_slice();
+204022d8:	f41ff0ef          	jal	ra,20402218 <z_reset_time_slice>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+204022dc:	30042473          	csrrs	s0,mstatus,s0
+}
+204022e0:	00c12083          	lw	ra,12(sp)
+204022e4:	00812403          	lw	s0,8(sp)
+204022e8:	00412483          	lw	s1,4(sp)
+204022ec:	00012903          	lw	s2,0(sp)
+204022f0:	01010113          	addi	sp,sp,16
+204022f4:	00008067          	ret
+			slice_time = MAX(2, slice_time);
+204022f8:	00200713          	li	a4,2
+204022fc:	fce558e3          	bge	a0,a4,204022cc <k_sched_time_slice_set+0x5c>
+20402300:	00200513          	li	a0,2
+20402304:	fc9ff06f          	j	204022cc <k_sched_time_slice_set+0x5c>
+
+20402308 <z_reschedule>:
+	 * have the single bit set).  But there is a mask applied to
+	 * the argument in arch_irq_unlock() that has me worried
+	 * that something elseswhere might try to set a bit?  Do it
+	 * the safe way for now.
+	 */
+	return (key & MSTATUS_IEN) == MSTATUS_IEN;
+20402308:	0085f713          	andi	a4,a1,8
+{
+2040230c:	00058513          	mv	a0,a1
+	return arch_irq_unlocked(key) && !arch_is_in_isr();
+20402310:	02070263          	beqz	a4,20402334 <z_reschedule+0x2c>
+FUNC_NORETURN void z_riscv_fatal_error(unsigned int reason,
+				       const z_arch_esf_t *esf);
+
+static inline bool arch_is_in_isr(void)
+{
+	return _kernel.cpus[0].nested != 0U;
+20402314:	800007b7          	lui	a5,0x80000
+20402318:	12878793          	addi	a5,a5,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+	if (resched(key.key) && need_swap()) {
+2040231c:	0007a683          	lw	a3,0(a5)
+20402320:	00069a63          	bnez	a3,20402334 <z_reschedule+0x2c>
+20402324:	0187a683          	lw	a3,24(a5)
+20402328:	0087a783          	lw	a5,8(a5)
+2040232c:	00f68463          	beq	a3,a5,20402334 <z_reschedule+0x2c>
+20402330:	f91fd06f          	j	204002c0 <arch_swap>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402334:	30072773          	csrrs	a4,mstatus,a4
+}
+20402338:	00008067          	ret
+
+2040233c <z_reschedule_irqlock>:
+	return (key & MSTATUS_IEN) == MSTATUS_IEN;
+2040233c:	00857793          	andi	a5,a0,8
+	return arch_irq_unlocked(key) && !arch_is_in_isr();
+20402340:	00078a63          	beqz	a5,20402354 <z_reschedule_irqlock+0x18>
+	if (resched(key)) {
+20402344:	80000737          	lui	a4,0x80000
+20402348:	12872703          	lw	a4,296(a4) # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+2040234c:	00071463          	bnez	a4,20402354 <z_reschedule_irqlock+0x18>
+20402350:	f71fd06f          	j	204002c0 <arch_swap>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402354:	3007a7f3          	csrrs	a5,mstatus,a5
+}
+20402358:	00008067          	ret
+
+2040235c <z_reschedule_unlocked>:
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+2040235c:	00800513          	li	a0,8
+20402360:	30053573          	csrrc	a0,mstatus,a0
+	(void) z_reschedule_irqlock(arch_irq_lock());
+20402364:	00857513          	andi	a0,a0,8
+20402368:	fd5ff06f          	j	2040233c <z_reschedule_irqlock>
+
+2040236c <k_sched_lock>:
+2040236c:	00800793          	li	a5,8
+20402370:	3007b7f3          	csrrc	a5,mstatus,a5
+static inline void z_sched_lock(void)
+{
+	__ASSERT(!arch_is_in_isr(), "");
+	__ASSERT(_current->base.sched_locked != 1U, "");
+
+	--_current->base.sched_locked;
+20402374:	80000737          	lui	a4,0x80000
+20402378:	13072683          	lw	a3,304(a4) # 80000130 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000131>
+2040237c:	00f6c703          	lbu	a4,15(a3)
+20402380:	fff70713          	addi	a4,a4,-1
+20402384:	00e687a3          	sb	a4,15(a3)
+	key = (mstatus & MSTATUS_IEN);
+20402388:	0087f793          	andi	a5,a5,8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+2040238c:	3007a7f3          	csrrs	a5,mstatus,a5
+}
+20402390:	00008067          	ret
+
+20402394 <z_priq_dumb_best>:
+}
+
+struct k_thread *z_priq_dumb_best(sys_dlist_t *pq)
+{
+20402394:	00050793          	mv	a5,a0
+	return list->head == list;
+20402398:	00052503          	lw	a0,0(a0)
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+2040239c:	00a79463          	bne	a5,a0,204023a4 <z_priq_dumb_best+0x10>
+	struct k_thread *thread = NULL;
+204023a0:	00000513          	li	a0,0
+
+	if (n != NULL) {
+		thread = CONTAINER_OF(n, struct k_thread, base.qnode_dlist);
+	}
+	return thread;
+}
+204023a4:	00008067          	ret
+
+204023a8 <update_cache>:
+{
+204023a8:	ff010113          	addi	sp,sp,-16
+204023ac:	01212023          	sw	s2,0(sp)
+204023b0:	00050913          	mv	s2,a0
+	return _priq_run_best(curr_cpu_runq());
+204023b4:	80000537          	lui	a0,0x80000
+204023b8:	14450513          	addi	a0,a0,324 # 80000144 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000145>
+{
+204023bc:	00812423          	sw	s0,8(sp)
+204023c0:	00912223          	sw	s1,4(sp)
+204023c4:	00112623          	sw	ra,12(sp)
+204023c8:	80000437          	lui	s0,0x80000
+	return _priq_run_best(curr_cpu_runq());
+204023cc:	fc9ff0ef          	jal	ra,20402394 <z_priq_dumb_best>
+	return (thread != NULL) ? thread : _current_cpu->idle_thread;
+204023d0:	12840413          	addi	s0,s0,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+204023d4:	00050493          	mv	s1,a0
+204023d8:	00051463          	bnez	a0,204023e0 <update_cache+0x38>
+204023dc:	00c42483          	lw	s1,12(s0)
+	if (z_is_thread_prevented_from_running(_current)) {
+204023e0:	00842783          	lw	a5,8(s0)
+	if (preempt_ok != 0) {
+204023e4:	02091c63          	bnez	s2,2040241c <update_cache+0x74>
+	if (z_is_thread_prevented_from_running(_current)) {
+204023e8:	00d7c703          	lbu	a4,13(a5)
+204023ec:	01f77713          	andi	a4,a4,31
+204023f0:	02071663          	bnez	a4,2040241c <update_cache+0x74>
+	if (is_preempt(_current) || is_metairq(thread)) {
+204023f4:	00e7d683          	lhu	a3,14(a5)
+204023f8:	07f00713          	li	a4,127
+204023fc:	02d77063          	bgeu	a4,a3,2040241c <update_cache+0x74>
+		_kernel.ready_q.cache = _current;
+20402400:	00f42c23          	sw	a5,24(s0)
+}
+20402404:	00c12083          	lw	ra,12(sp)
+20402408:	00812403          	lw	s0,8(sp)
+2040240c:	00412483          	lw	s1,4(sp)
+20402410:	00012903          	lw	s2,0(sp)
+20402414:	01010113          	addi	sp,sp,16
+20402418:	00008067          	ret
+		if (thread != _current) {
+2040241c:	00f48463          	beq	s1,a5,20402424 <update_cache+0x7c>
+			z_reset_time_slice();
+20402420:	df9ff0ef          	jal	ra,20402218 <z_reset_time_slice>
+		_kernel.ready_q.cache = thread;
+20402424:	00942c23          	sw	s1,24(s0)
+}
+20402428:	fddff06f          	j	20402404 <update_cache+0x5c>
+
+2040242c <move_thread_to_end_of_prio_q>:
+{
+2040242c:	ff010113          	addi	sp,sp,-16
+20402430:	00812423          	sw	s0,8(sp)
+20402434:	00112623          	sw	ra,12(sp)
+	return (thread->base.thread_state & state) != 0U;
+20402438:	00d54783          	lbu	a5,13(a0)
+2040243c:	00050413          	mv	s0,a0
+	if (z_is_thread_queued(thread)) {
+20402440:	01879713          	slli	a4,a5,0x18
+20402444:	41875713          	srai	a4,a4,0x18
+20402448:	00075863          	bgez	a4,20402458 <move_thread_to_end_of_prio_q+0x2c>
+	thread->base.thread_state &= ~_THREAD_QUEUED;
+2040244c:	07f7f793          	andi	a5,a5,127
+20402450:	00f506a3          	sb	a5,13(a0)
+	sys_dlist_remove(&thread->base.qnode_dlist);
+20402454:	d75ff0ef          	jal	ra,204021c8 <sys_dlist_remove>
+	thread->base.thread_state |= _THREAD_QUEUED;
+20402458:	00d44783          	lbu	a5,13(s0)
+	return list->head == list;
+2040245c:	80000737          	lui	a4,0x80000
+20402460:	12870693          	addi	a3,a4,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+20402464:	f807e793          	ori	a5,a5,-128
+20402468:	00f406a3          	sb	a5,13(s0)
+2040246c:	01c6a783          	lw	a5,28(a3)
+	return (node == list->tail) ? NULL : node->next;
+20402470:	0206a583          	lw	a1,32(a3)
+20402474:	800006b7          	lui	a3,0x80000
+20402478:	14468693          	addi	a3,a3,324 # 80000144 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000145>
+2040247c:	12870713          	addi	a4,a4,296
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+20402480:	04d78c63          	beq	a5,a3,204024d8 <move_thread_to_end_of_prio_q+0xac>
+	SYS_DLIST_FOR_EACH_CONTAINER(pq, t, base.qnode_dlist) {
+20402484:	04078a63          	beqz	a5,204024d8 <move_thread_to_end_of_prio_q+0xac>
+	int32_t b1 = thread_1->base.prio;
+20402488:	00e40503          	lb	a0,14(s0)
+	int32_t b2 = thread_2->base.prio;
+2040248c:	00e78603          	lb	a2,14(a5)
+	if (b1 != b2) {
+20402490:	02c50e63          	beq	a0,a2,204024cc <move_thread_to_end_of_prio_q+0xa0>
+		return b2 - b1;
+20402494:	40a60633          	sub	a2,a2,a0
+		if (z_sched_prio_cmp(thread, t) > 0) {
+20402498:	02c05a63          	blez	a2,204024cc <move_thread_to_end_of_prio_q+0xa0>
+	sys_dnode_t *const prev = successor->prev;
+2040249c:	0047a683          	lw	a3,4(a5)
+	node->next = successor;
+204024a0:	00f42023          	sw	a5,0(s0)
+	node->prev = prev;
+204024a4:	00d42223          	sw	a3,4(s0)
+	prev->next = node;
+204024a8:	0086a023          	sw	s0,0(a3)
+	successor->prev = node;
+204024ac:	0087a223          	sw	s0,4(a5)
+	update_cache(thread == _current);
+204024b0:	00872503          	lw	a0,8(a4)
+}
+204024b4:	00c12083          	lw	ra,12(sp)
+	update_cache(thread == _current);
+204024b8:	40850533          	sub	a0,a0,s0
+}
+204024bc:	00812403          	lw	s0,8(sp)
+	update_cache(thread == _current);
+204024c0:	00153513          	seqz	a0,a0
+}
+204024c4:	01010113          	addi	sp,sp,16
+	update_cache(thread == _current);
+204024c8:	ee1ff06f          	j	204023a8 <update_cache>
+	return (node == list->tail) ? NULL : node->next;
+204024cc:	00b78663          	beq	a5,a1,204024d8 <move_thread_to_end_of_prio_q+0xac>
+204024d0:	0007a783          	lw	a5,0(a5)
+	SYS_DLIST_FOR_EACH_CONTAINER(pq, t, base.qnode_dlist) {
+204024d4:	fa079ce3          	bnez	a5,2040248c <move_thread_to_end_of_prio_q+0x60>
+	node->next = list;
+204024d8:	00d42023          	sw	a3,0(s0)
+	node->prev = tail;
+204024dc:	00b42223          	sw	a1,4(s0)
+	tail->next = node;
+204024e0:	0085a023          	sw	s0,0(a1)
+	list->tail = node;
+204024e4:	02872023          	sw	s0,32(a4)
+}
+204024e8:	fc9ff06f          	j	204024b0 <move_thread_to_end_of_prio_q+0x84>
+
+204024ec <z_time_slice>:
+{
+204024ec:	ff010113          	addi	sp,sp,-16
+204024f0:	00812423          	sw	s0,8(sp)
+204024f4:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+204024f8:	00800413          	li	s0,8
+204024fc:	30043473          	csrrc	s0,mstatus,s0
+	if (slice_time && sliceable(_current)) {
+20402500:	800007b7          	lui	a5,0x80000
+20402504:	0187a703          	lw	a4,24(a5) # 80000018 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000019>
+20402508:	800007b7          	lui	a5,0x80000
+	key = (mstatus & MSTATUS_IEN);
+2040250c:	00847413          	andi	s0,s0,8
+20402510:	12878793          	addi	a5,a5,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+20402514:	06070863          	beqz	a4,20402584 <z_time_slice+0x98>
+20402518:	00050693          	mv	a3,a0
+2040251c:	0087a503          	lw	a0,8(a5)
+		&& !z_is_idle_thread_object(thread);
+20402520:	07f00713          	li	a4,127
+20402524:	00e55603          	lhu	a2,14(a0)
+20402528:	04c76e63          	bltu	a4,a2,20402584 <z_time_slice+0x98>
+		&& !z_is_thread_prevented_from_running(thread)
+2040252c:	00d54703          	lbu	a4,13(a0)
+20402530:	01f77713          	andi	a4,a4,31
+20402534:	04071863          	bnez	a4,20402584 <z_time_slice+0x98>
+		&& !z_is_prio_higher(thread->base.prio, slice_max_prio)
+20402538:	80000737          	lui	a4,0x80000
+2040253c:	00e50603          	lb	a2,14(a0)
+20402540:	01472703          	lw	a4,20(a4) # 80000014 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000015>
+20402544:	04e64063          	blt	a2,a4,20402584 <z_time_slice+0x98>
+		&& !z_is_idle_thread_object(thread);
+20402548:	80000737          	lui	a4,0x80000
+2040254c:	02870713          	addi	a4,a4,40 # 80000028 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000029>
+20402550:	02e50a63          	beq	a0,a4,20402584 <z_time_slice+0x98>
+		if (ticks >= _current_cpu->slice_ticks) {
+20402554:	0107a703          	lw	a4,16(a5)
+20402558:	02e6c063          	blt	a3,a4,20402578 <z_time_slice+0x8c>
+			move_thread_to_end_of_prio_q(_current);
+2040255c:	ed1ff0ef          	jal	ra,2040242c <move_thread_to_end_of_prio_q>
+			z_reset_time_slice();
+20402560:	cb9ff0ef          	jal	ra,20402218 <z_reset_time_slice>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402564:	30042473          	csrrs	s0,mstatus,s0
+}
+20402568:	00c12083          	lw	ra,12(sp)
+2040256c:	00812403          	lw	s0,8(sp)
+20402570:	01010113          	addi	sp,sp,16
+20402574:	00008067          	ret
+			_current_cpu->slice_ticks -= ticks;
+20402578:	40d70733          	sub	a4,a4,a3
+2040257c:	00e7a823          	sw	a4,16(a5)
+20402580:	fe5ff06f          	j	20402564 <z_time_slice+0x78>
+		_current_cpu->slice_ticks = 0;
+20402584:	0007a823          	sw	zero,16(a5)
+20402588:	fddff06f          	j	20402564 <z_time_slice+0x78>
+
+2040258c <ready_thread>:
+2040258c:	00d54783          	lbu	a5,13(a0)
+	if (!z_is_thread_queued(thread) && z_is_thread_ready(thread)) {
+20402590:	01879713          	slli	a4,a5,0x18
+20402594:	41875713          	srai	a4,a4,0x18
+20402598:	08074863          	bltz	a4,20402628 <ready_thread+0x9c>
+	return !((z_is_thread_prevented_from_running(thread)) != 0U ||
+2040259c:	01f7f713          	andi	a4,a5,31
+204025a0:	08071463          	bnez	a4,20402628 <ready_thread+0x9c>
+204025a4:	01852703          	lw	a4,24(a0)
+204025a8:	08071063          	bnez	a4,20402628 <ready_thread+0x9c>
+	thread->base.thread_state |= _THREAD_QUEUED;
+204025ac:	f807e793          	ori	a5,a5,-128
+	return list->head == list;
+204025b0:	80000737          	lui	a4,0x80000
+204025b4:	12870693          	addi	a3,a4,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+204025b8:	00f506a3          	sb	a5,13(a0)
+204025bc:	01c6a783          	lw	a5,28(a3)
+	return (node == list->tail) ? NULL : node->next;
+204025c0:	0206a583          	lw	a1,32(a3)
+204025c4:	800006b7          	lui	a3,0x80000
+204025c8:	14468693          	addi	a3,a3,324 # 80000144 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000145>
+204025cc:	12870713          	addi	a4,a4,296
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+204025d0:	04d78263          	beq	a5,a3,20402614 <ready_thread+0x88>
+	SYS_DLIST_FOR_EACH_CONTAINER(pq, t, base.qnode_dlist) {
+204025d4:	04078063          	beqz	a5,20402614 <ready_thread+0x88>
+	int32_t b1 = thread_1->base.prio;
+204025d8:	00e50803          	lb	a6,14(a0)
+	int32_t b2 = thread_2->base.prio;
+204025dc:	00e78603          	lb	a2,14(a5)
+	if (b1 != b2) {
+204025e0:	02c80463          	beq	a6,a2,20402608 <ready_thread+0x7c>
+		return b2 - b1;
+204025e4:	41060633          	sub	a2,a2,a6
+		if (z_sched_prio_cmp(thread, t) > 0) {
+204025e8:	02c05063          	blez	a2,20402608 <ready_thread+0x7c>
+	sys_dnode_t *const prev = successor->prev;
+204025ec:	0047a703          	lw	a4,4(a5)
+	node->next = successor;
+204025f0:	00f52023          	sw	a5,0(a0)
+	node->prev = prev;
+204025f4:	00e52223          	sw	a4,4(a0)
+	prev->next = node;
+204025f8:	00a72023          	sw	a0,0(a4)
+	successor->prev = node;
+204025fc:	00a7a223          	sw	a0,4(a5)
+		update_cache(0);
+20402600:	00000513          	li	a0,0
+20402604:	da5ff06f          	j	204023a8 <update_cache>
+	return (node == list->tail) ? NULL : node->next;
+20402608:	00b78663          	beq	a5,a1,20402614 <ready_thread+0x88>
+2040260c:	0007a783          	lw	a5,0(a5)
+	SYS_DLIST_FOR_EACH_CONTAINER(pq, t, base.qnode_dlist) {
+20402610:	fc0796e3          	bnez	a5,204025dc <ready_thread+0x50>
+	node->next = list;
+20402614:	00d52023          	sw	a3,0(a0)
+	node->prev = tail;
+20402618:	00b52223          	sw	a1,4(a0)
+	tail->next = node;
+2040261c:	00a5a023          	sw	a0,0(a1)
+	list->tail = node;
+20402620:	02a72023          	sw	a0,32(a4)
+}
+20402624:	fddff06f          	j	20402600 <ready_thread+0x74>
+}
+20402628:	00008067          	ret
+
+2040262c <z_ready_thread>:
+{
+2040262c:	ff010113          	addi	sp,sp,-16
+20402630:	00812423          	sw	s0,8(sp)
+20402634:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402638:	00800413          	li	s0,8
+2040263c:	30043473          	csrrc	s0,mstatus,s0
+			ready_thread(thread);
+20402640:	f4dff0ef          	jal	ra,2040258c <ready_thread>
+	key = (mstatus & MSTATUS_IEN);
+20402644:	00847413          	andi	s0,s0,8
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402648:	30042473          	csrrs	s0,mstatus,s0
+}
+2040264c:	00c12083          	lw	ra,12(sp)
+20402650:	00812403          	lw	s0,8(sp)
+20402654:	01010113          	addi	sp,sp,16
+20402658:	00008067          	ret
+
+2040265c <z_sched_start>:
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+2040265c:	00800593          	li	a1,8
+20402660:	3005b5f3          	csrrc	a1,mstatus,a1
+	return (thread->base.thread_state & _THREAD_PRESTART) == 0U;
+20402664:	00d54703          	lbu	a4,13(a0)
+	key = (mstatus & MSTATUS_IEN);
+20402668:	0085f593          	andi	a1,a1,8
+	if (z_has_thread_started(thread)) {
+2040266c:	00477693          	andi	a3,a4,4
+20402670:	00069663          	bnez	a3,2040267c <z_sched_start+0x20>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402674:	3005a5f3          	csrrs	a1,mstatus,a1
+		return;
+20402678:	00008067          	ret
+{
+2040267c:	fe010113          	addi	sp,sp,-32
+20402680:	00112e23          	sw	ra,28(sp)
+	thread->base.thread_state &= ~_THREAD_PRESTART;
+20402684:	ffb77713          	andi	a4,a4,-5
+20402688:	00e506a3          	sb	a4,13(a0)
+2040268c:	00b12623          	sw	a1,12(sp)
+	ready_thread(thread);
+20402690:	efdff0ef          	jal	ra,2040258c <ready_thread>
+	z_reschedule(&sched_spinlock, key);
+20402694:	00c12583          	lw	a1,12(sp)
+}
+20402698:	01c12083          	lw	ra,28(sp)
+	z_reschedule(&sched_spinlock, key);
+2040269c:	80000537          	lui	a0,0x80000
+204026a0:	14c50513          	addi	a0,a0,332 # 8000014c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x8000014d>
+}
+204026a4:	02010113          	addi	sp,sp,32
+	z_reschedule(&sched_spinlock, key);
+204026a8:	c61ff06f          	j	20402308 <z_reschedule>
+
+204026ac <z_thread_timeout>:
+{
+204026ac:	fe010113          	addi	sp,sp,-32
+204026b0:	00912a23          	sw	s1,20(sp)
+204026b4:	00112e23          	sw	ra,28(sp)
+204026b8:	00812c23          	sw	s0,24(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+204026bc:	00800493          	li	s1,8
+204026c0:	3004b4f3          	csrrc	s1,mstatus,s1
+		if (!killed) {
+204026c4:	ff554783          	lbu	a5,-11(a0)
+	key = (mstatus & MSTATUS_IEN);
+204026c8:	0084f493          	andi	s1,s1,8
+204026cc:	0287f793          	andi	a5,a5,40
+204026d0:	02079863          	bnez	a5,20402700 <z_thread_timeout+0x54>
+204026d4:	00050413          	mv	s0,a0
+			if (thread->base.pended_on != NULL) {
+204026d8:	ff042783          	lw	a5,-16(s0)
+	struct k_thread *thread = CONTAINER_OF(timeout,
+204026dc:	fe850513          	addi	a0,a0,-24
+			if (thread->base.pended_on != NULL) {
+204026e0:	00078863          	beqz	a5,204026f0 <z_thread_timeout+0x44>
+				unpend_thread_no_timeout(thread);
+204026e4:	00a12623          	sw	a0,12(sp)
+204026e8:	afdff0ef          	jal	ra,204021e4 <unpend_thread_no_timeout>
+204026ec:	00c12503          	lw	a0,12(sp)
+	thread->base.thread_state &= ~_THREAD_SUSPENDED;
+204026f0:	ff544783          	lbu	a5,-11(s0)
+204026f4:	feb7f793          	andi	a5,a5,-21
+204026f8:	fef40aa3          	sb	a5,-11(s0)
+			ready_thread(thread);
+204026fc:	e91ff0ef          	jal	ra,2040258c <ready_thread>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402700:	3004a4f3          	csrrs	s1,mstatus,s1
+}
+20402704:	01c12083          	lw	ra,28(sp)
+20402708:	01812403          	lw	s0,24(sp)
+2040270c:	01412483          	lw	s1,20(sp)
+20402710:	02010113          	addi	sp,sp,32
+20402714:	00008067          	ret
+
+20402718 <k_sched_unlock>:
+{
+20402718:	ff010113          	addi	sp,sp,-16
+2040271c:	00812423          	sw	s0,8(sp)
+20402720:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402724:	00800413          	li	s0,8
+20402728:	30043473          	csrrc	s0,mstatus,s0
+		++_current->base.sched_locked;
+2040272c:	800007b7          	lui	a5,0x80000
+20402730:	1307a703          	lw	a4,304(a5) # 80000130 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000131>
+		update_cache(0);
+20402734:	00000513          	li	a0,0
+	key = (mstatus & MSTATUS_IEN);
+20402738:	00847413          	andi	s0,s0,8
+		++_current->base.sched_locked;
+2040273c:	00f74783          	lbu	a5,15(a4)
+20402740:	00178793          	addi	a5,a5,1
+20402744:	00f707a3          	sb	a5,15(a4)
+		update_cache(0);
+20402748:	c61ff0ef          	jal	ra,204023a8 <update_cache>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+2040274c:	30042473          	csrrs	s0,mstatus,s0
+}
+20402750:	00812403          	lw	s0,8(sp)
+20402754:	00c12083          	lw	ra,12(sp)
+20402758:	01010113          	addi	sp,sp,16
+	z_reschedule_unlocked();
+2040275c:	c01ff06f          	j	2040235c <z_reschedule_unlocked>
+
+20402760 <z_sched_init>:
+	list->head = (sys_dnode_t *)list;
+20402760:	800007b7          	lui	a5,0x80000
+20402764:	80000737          	lui	a4,0x80000
+20402768:	12878793          	addi	a5,a5,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+2040276c:	14470713          	addi	a4,a4,324 # 80000144 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000145>
+20402770:	00e7ae23          	sw	a4,28(a5)
+	list->tail = (sys_dnode_t *)list;
+20402774:	02e7a023          	sw	a4,32(a5)
+#else
+	init_ready_q(&_kernel.ready_q);
+#endif
+
+#ifdef CONFIG_TIMESLICING
+	k_sched_time_slice_set(CONFIG_TIMESLICE_SIZE,
+20402778:	00000593          	li	a1,0
+2040277c:	00000513          	li	a0,0
+20402780:	af1ff06f          	j	20402270 <k_sched_time_slice_set>
+
+20402784 <z_impl_z_current_get>:
+
+#ifdef CONFIG_SMP
+	arch_irq_unlock(k);
+#endif
+	return ret;
+}
+20402784:	800007b7          	lui	a5,0x80000
+20402788:	1307a503          	lw	a0,304(a5) # 80000130 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000131>
+2040278c:	00008067          	ret
+
+20402790 <z_thread_abort>:
+#endif
+	}
+}
+
+void z_thread_abort(struct k_thread *thread)
+{
+20402790:	fe010113          	addi	sp,sp,-32
+20402794:	00912a23          	sw	s1,20(sp)
+20402798:	00112e23          	sw	ra,28(sp)
+2040279c:	00812c23          	sw	s0,24(sp)
+204027a0:	01212823          	sw	s2,16(sp)
+204027a4:	01312623          	sw	s3,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+204027a8:	00800493          	li	s1,8
+204027ac:	3004b4f3          	csrrc	s1,mstatus,s1
+	k_spinlock_key_t key = k_spin_lock(&sched_spinlock);
+
+	if ((thread->base.thread_state & _THREAD_DEAD) != 0U) {
+204027b0:	00d54783          	lbu	a5,13(a0)
+	key = (mstatus & MSTATUS_IEN);
+204027b4:	0084f493          	andi	s1,s1,8
+204027b8:	0087f713          	andi	a4,a5,8
+204027bc:	02070263          	beqz	a4,204027e0 <z_thread_abort+0x50>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+204027c0:	3004a4f3          	csrrs	s1,mstatus,s1
+	if (thread == _current && !arch_is_in_isr()) {
+		z_swap(&sched_spinlock, key);
+		__ASSERT(false, "aborted _current back from dead");
+	}
+	k_spin_unlock(&sched_spinlock, key);
+}
+204027c4:	01c12083          	lw	ra,28(sp)
+204027c8:	01812403          	lw	s0,24(sp)
+204027cc:	01412483          	lw	s1,20(sp)
+204027d0:	01012903          	lw	s2,16(sp)
+204027d4:	00c12983          	lw	s3,12(sp)
+204027d8:	02010113          	addi	sp,sp,32
+204027dc:	00008067          	ret
+		thread->base.thread_state &= ~_THREAD_ABORTING;
+204027e0:	fdf7f713          	andi	a4,a5,-33
+204027e4:	00876713          	ori	a4,a4,8
+		if (z_is_thread_queued(thread)) {
+204027e8:	01871693          	slli	a3,a4,0x18
+204027ec:	4186d693          	srai	a3,a3,0x18
+204027f0:	00050413          	mv	s0,a0
+204027f4:	0406ce63          	bltz	a3,20402850 <z_thread_abort+0xc0>
+		thread->base.thread_state &= ~_THREAD_ABORTING;
+204027f8:	00e506a3          	sb	a4,13(a0)
+		if (thread->base.pended_on != NULL) {
+204027fc:	00842783          	lw	a5,8(s0)
+20402800:	00078663          	beqz	a5,2040280c <z_thread_abort+0x7c>
+			unpend_thread_no_timeout(thread);
+20402804:	00040513          	mv	a0,s0
+20402808:	9ddff0ef          	jal	ra,204021e4 <unpend_thread_no_timeout>
+}
+
+static inline int z_abort_thread_timeout(struct k_thread *thread)
+{
+	return z_abort_timeout(&thread->base.timeout);
+2040280c:	01840513          	addi	a0,s0,24
+20402810:	340000ef          	jal	ra,20402b50 <z_abort_timeout>
+}
+
+static inline struct k_thread *z_waitq_head(_wait_q_t *w)
+{
+	return (struct k_thread *)sys_dlist_peek_head(&w->waitq);
+20402814:	06840993          	addi	s3,s0,104
+	return list->head == list;
+20402818:	06842903          	lw	s2,104(s0)
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+2040281c:	01390463          	beq	s2,s3,20402824 <z_thread_abort+0x94>
+	while ((thread = z_waitq_head(wait_q)) != NULL) {
+20402820:	04091263          	bnez	s2,20402864 <z_thread_abort+0xd4>
+		update_cache(1);
+20402824:	00100513          	li	a0,1
+20402828:	b81ff0ef          	jal	ra,204023a8 <update_cache>
+	if (thread == _current && !arch_is_in_isr()) {
+2040282c:	800007b7          	lui	a5,0x80000
+20402830:	12878793          	addi	a5,a5,296 # 80000128 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000129>
+20402834:	0087a703          	lw	a4,8(a5)
+20402838:	f88714e3          	bne	a4,s0,204027c0 <z_thread_abort+0x30>
+2040283c:	0007a783          	lw	a5,0(a5)
+20402840:	f80790e3          	bnez	a5,204027c0 <z_thread_abort+0x30>
+20402844:	00048513          	mv	a0,s1
+20402848:	a79fd0ef          	jal	ra,204002c0 <arch_swap>
+	return ret;
+2040284c:	f75ff06f          	j	204027c0 <z_thread_abort+0x30>
+	thread->base.thread_state &= ~_THREAD_QUEUED;
+20402850:	05f7f793          	andi	a5,a5,95
+20402854:	0087e793          	ori	a5,a5,8
+20402858:	00f506a3          	sb	a5,13(a0)
+	sys_dlist_remove(&thread->base.qnode_dlist);
+2040285c:	96dff0ef          	jal	ra,204021c8 <sys_dlist_remove>
+}
+20402860:	f9dff06f          	j	204027fc <z_thread_abort+0x6c>
+		unpend_thread_no_timeout(thread);
+20402864:	00090513          	mv	a0,s2
+20402868:	97dff0ef          	jal	ra,204021e4 <unpend_thread_no_timeout>
+2040286c:	01890513          	addi	a0,s2,24
+20402870:	2e0000ef          	jal	ra,20402b50 <z_abort_timeout>
+		ready_thread(thread);
+20402874:	00090513          	mv	a0,s2
+	thread->arch.swap_return_value = value;
+20402878:	06092c23          	sw	zero,120(s2)
+2040287c:	d11ff0ef          	jal	ra,2040258c <ready_thread>
+20402880:	f99ff06f          	j	20402818 <z_thread_abort+0x88>
+
+20402884 <z_impl_k_thread_abort>:
+#if !defined(CONFIG_ARCH_HAS_THREAD_ABORT)
+void z_impl_k_thread_abort(struct k_thread *thread)
+{
+	SYS_PORT_TRACING_OBJ_FUNC_ENTER(k_thread, abort, thread);
+
+	z_thread_abort(thread);
+20402884:	f0dff06f          	j	20402790 <z_thread_abort>
+
+20402888 <z_data_copy>:
+ * @return N/A
+ */
+void z_data_copy(void)
+{
+	(void)memcpy(&__data_region_start, &__data_region_load_start,
+		 __data_region_end - __data_region_start);
+20402888:	80001537          	lui	a0,0x80001
+	(void)memcpy(&__data_region_start, &__data_region_load_start,
+2040288c:	800017b7          	lui	a5,0x80001
+		 __data_region_end - __data_region_start);
+20402890:	f5050613          	addi	a2,a0,-176 # 80000f50 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f51>
+	(void)memcpy(&__data_region_start, &__data_region_load_start,
+20402894:	f5c78793          	addi	a5,a5,-164 # 80000f5c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000f5d>
+20402898:	204035b7          	lui	a1,0x20403
+2040289c:	40c78633          	sub	a2,a5,a2
+204028a0:	22458593          	addi	a1,a1,548 # 20403224 <__data_load_start>
+204028a4:	f5050513          	addi	a0,a0,-176
+204028a8:	9b0ff06f          	j	20401a58 <memcpy>
+
+204028ac <elapsed>:
+	sys_dlist_remove(&t->node);
+}
+
+static int32_t elapsed(void)
+{
+	return announce_remaining == 0 ? sys_clock_elapsed() : 0U;
+204028ac:	800007b7          	lui	a5,0x80000
+204028b0:	01c7a783          	lw	a5,28(a5) # 8000001c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x8000001d>
+204028b4:	00079463          	bnez	a5,204028bc <elapsed+0x10>
+204028b8:	cc4ff06f          	j	20401d7c <sys_clock_elapsed>
+}
+204028bc:	00000513          	li	a0,0
+204028c0:	00008067          	ret
+
+204028c4 <next_timeout>:
+
+static int32_t next_timeout(void)
+{
+204028c4:	ff010113          	addi	sp,sp,-16
+	return list->head == list;
+204028c8:	80418793          	addi	a5,gp,-2044 # 80000f54 <timeout_list>
+204028cc:	00812423          	sw	s0,8(sp)
+204028d0:	0007a403          	lw	s0,0(a5)
+204028d4:	00112623          	sw	ra,12(sp)
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+204028d8:	00f41463          	bne	s0,a5,204028e0 <next_timeout+0x1c>
+204028dc:	00000413          	li	s0,0
+	struct _timeout *to = first();
+	int32_t ticks_elapsed = elapsed();
+204028e0:	fcdff0ef          	jal	ra,204028ac <elapsed>
+	int32_t ret = to == NULL ? MAX_WAIT
+204028e4:	02040c63          	beqz	s0,2040291c <next_timeout+0x58>
+		: CLAMP(to->dticks - ticks_elapsed, 0, MAX_WAIT);
+204028e8:	01042703          	lw	a4,16(s0)
+204028ec:	01442783          	lw	a5,20(s0)
+204028f0:	41f55693          	srai	a3,a0,0x1f
+204028f4:	40a70533          	sub	a0,a4,a0
+204028f8:	00a73733          	sltu	a4,a4,a0
+204028fc:	40d787b3          	sub	a5,a5,a3
+20402900:	40e787b3          	sub	a5,a5,a4
+	int32_t ret = to == NULL ? MAX_WAIT
+20402904:	00f04663          	bgtz	a5,20402910 <next_timeout+0x4c>
+20402908:	04079063          	bnez	a5,20402948 <next_timeout+0x84>
+2040290c:	02050e63          	beqz	a0,20402948 <next_timeout+0x84>
+		: CLAMP(to->dticks - ticks_elapsed, 0, MAX_WAIT);
+20402910:	00f04663          	bgtz	a5,2040291c <next_timeout+0x58>
+20402914:	00079863          	bnez	a5,20402924 <next_timeout+0x60>
+20402918:	00055663          	bgez	a0,20402924 <next_timeout+0x60>
+	int32_t ret = to == NULL ? MAX_WAIT
+2040291c:	80000537          	lui	a0,0x80000
+20402920:	fff54513          	not	a0,a0
+
+#ifdef CONFIG_TIMESLICING
+	if (_current_cpu->slice_ticks && _current_cpu->slice_ticks < ret) {
+20402924:	800007b7          	lui	a5,0x80000
+20402928:	1387a783          	lw	a5,312(a5) # 80000138 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000139>
+2040292c:	00078663          	beqz	a5,20402938 <next_timeout+0x74>
+20402930:	00a7d463          	bge	a5,a0,20402938 <next_timeout+0x74>
+20402934:	00078513          	mv	a0,a5
+		ret = _current_cpu->slice_ticks;
+	}
+#endif
+	return ret;
+}
+20402938:	00c12083          	lw	ra,12(sp)
+2040293c:	00812403          	lw	s0,8(sp)
+20402940:	01010113          	addi	sp,sp,16
+20402944:	00008067          	ret
+	int32_t ret = to == NULL ? MAX_WAIT
+20402948:	00000513          	li	a0,0
+2040294c:	fd9ff06f          	j	20402924 <next_timeout+0x60>
+
+20402950 <remove_timeout>:
+	return (node == list->tail) ? NULL : node->next;
+20402950:	00052783          	lw	a5,0(a0) # 80000000 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000001>
+	return (node != NULL) ? sys_dlist_peek_next_no_check(list, node) : NULL;
+20402954:	02050c63          	beqz	a0,2040298c <remove_timeout+0x3c>
+	return (node == list->tail) ? NULL : node->next;
+20402958:	8081a703          	lw	a4,-2040(gp) # 80000f58 <timeout_list+0x4>
+2040295c:	02e50863          	beq	a0,a4,2040298c <remove_timeout+0x3c>
+	if (next(t) != NULL) {
+20402960:	02078663          	beqz	a5,2040298c <remove_timeout+0x3c>
+		next(t)->dticks += t->dticks;
+20402964:	0107a703          	lw	a4,16(a5)
+20402968:	01052683          	lw	a3,16(a0)
+2040296c:	01452583          	lw	a1,20(a0)
+20402970:	0147a603          	lw	a2,20(a5)
+20402974:	00d706b3          	add	a3,a4,a3
+20402978:	00e6b733          	sltu	a4,a3,a4
+2040297c:	00b60633          	add	a2,a2,a1
+20402980:	00c70733          	add	a4,a4,a2
+20402984:	00d7a823          	sw	a3,16(a5)
+20402988:	00e7aa23          	sw	a4,20(a5)
+	sys_dnode_t *const prev = node->prev;
+2040298c:	00452703          	lw	a4,4(a0)
+	prev->next = next;
+20402990:	00f72023          	sw	a5,0(a4)
+	next->prev = prev;
+20402994:	00e7a223          	sw	a4,4(a5)
+	node->next = NULL;
+20402998:	00052023          	sw	zero,0(a0)
+	node->prev = NULL;
+2040299c:	00052223          	sw	zero,4(a0)
+}
+204029a0:	00008067          	ret
+
+204029a4 <z_add_timeout>:
+
+void z_add_timeout(struct _timeout *to, _timeout_func_t fn,
+		   k_timeout_t timeout)
+{
+204029a4:	fe010113          	addi	sp,sp,-32
+204029a8:	00812c23          	sw	s0,24(sp)
+204029ac:	00912a23          	sw	s1,20(sp)
+204029b0:	01312623          	sw	s3,12(sp)
+204029b4:	00112e23          	sw	ra,28(sp)
+204029b8:	00068993          	mv	s3,a3
+204029bc:	01212823          	sw	s2,16(sp)
+	if (K_TIMEOUT_EQ(timeout, K_FOREVER)) {
+204029c0:	fff00693          	li	a3,-1
+{
+204029c4:	00050413          	mv	s0,a0
+204029c8:	00060493          	mv	s1,a2
+	if (K_TIMEOUT_EQ(timeout, K_FOREVER)) {
+204029cc:	00d61463          	bne	a2,a3,204029d4 <z_add_timeout+0x30>
+204029d0:	16c98263          	beq	s3,a2,20402b34 <z_add_timeout+0x190>
+#ifdef CONFIG_KERNEL_COHERENCE
+	__ASSERT_NO_MSG(arch_mem_coherent(to));
+#endif
+
+	__ASSERT(!sys_dnode_is_linked(&to->node), "");
+	to->fn = fn;
+204029d4:	00b42423          	sw	a1,8(s0)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+204029d8:	00800913          	li	s2,8
+204029dc:	30093973          	csrrc	s2,mstatus,s2
+
+	LOCKED(&timeout_lock) {
+		struct _timeout *t;
+
+		if (IS_ENABLED(CONFIG_TIMEOUT_64BIT) &&
+		    Z_TICK_ABS(timeout.ticks) >= 0) {
+204029e0:	ffe00693          	li	a3,-2
+204029e4:	409687b3          	sub	a5,a3,s1
+204029e8:	00f6b733          	sltu	a4,a3,a5
+204029ec:	fff9c793          	not	a5,s3
+204029f0:	40e787b3          	sub	a5,a5,a4
+	key = (mstatus & MSTATUS_IEN);
+204029f4:	00897913          	andi	s2,s2,8
+		if (IS_ENABLED(CONFIG_TIMEOUT_64BIT) &&
+204029f8:	0607cc63          	bltz	a5,20402a70 <z_add_timeout+0xcc>
+			k_ticks_t ticks = Z_TICK_ABS(timeout.ticks) - curr_tick;
+204029fc:	800007b7          	lui	a5,0x80000
+20402a00:	00878793          	addi	a5,a5,8 # 80000008 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000009>
+20402a04:	0007a703          	lw	a4,0(a5)
+20402a08:	0047a783          	lw	a5,4(a5)
+20402a0c:	40e68733          	sub	a4,a3,a4
+20402a10:	00e6b6b3          	sltu	a3,a3,a4
+20402a14:	fff7c793          	not	a5,a5
+20402a18:	40d787b3          	sub	a5,a5,a3
+20402a1c:	409704b3          	sub	s1,a4,s1
+20402a20:	00973733          	sltu	a4,a4,s1
+20402a24:	413786b3          	sub	a3,a5,s3
+
+			to->dticks = MAX(1, ticks);
+20402a28:	40e686b3          	sub	a3,a3,a4
+20402a2c:	00d04a63          	bgtz	a3,20402a40 <z_add_timeout+0x9c>
+20402a30:	00069463          	bnez	a3,20402a38 <z_add_timeout+0x94>
+20402a34:	00049663          	bnez	s1,20402a40 <z_add_timeout+0x9c>
+20402a38:	00100493          	li	s1,1
+20402a3c:	00000693          	li	a3,0
+20402a40:	00942823          	sw	s1,16(s0)
+	return list->head == list;
+20402a44:	80418713          	addi	a4,gp,-2044 # 80000f54 <timeout_list>
+20402a48:	00072783          	lw	a5,0(a4)
+		} else {
+			to->dticks = timeout.ticks + 1 + elapsed();
+20402a4c:	00d42a23          	sw	a3,20(s0)
+20402a50:	80418613          	addi	a2,gp,-2044 # 80000f54 <timeout_list>
+	sys_dnode_t *const tail = list->tail;
+20402a54:	00472803          	lw	a6,4(a4)
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+20402a58:	06c79263          	bne	a5,a2,20402abc <z_add_timeout+0x118>
+	node->next = list;
+20402a5c:	00c42023          	sw	a2,0(s0)
+	node->prev = tail;
+20402a60:	01042223          	sw	a6,4(s0)
+	tail->next = node;
+20402a64:	00882023          	sw	s0,0(a6)
+	list->tail = node;
+20402a68:	00862223          	sw	s0,4(a2)
+}
+20402a6c:	09c0006f          	j	20402b08 <z_add_timeout+0x164>
+20402a70:	e3dff0ef          	jal	ra,204028ac <elapsed>
+20402a74:	00148793          	addi	a5,s1,1
+20402a78:	0097b4b3          	sltu	s1,a5,s1
+20402a7c:	013486b3          	add	a3,s1,s3
+20402a80:	41f55493          	srai	s1,a0,0x1f
+20402a84:	00a78533          	add	a0,a5,a0
+20402a88:	00f537b3          	sltu	a5,a0,a5
+20402a8c:	009686b3          	add	a3,a3,s1
+20402a90:	00d786b3          	add	a3,a5,a3
+20402a94:	00a42823          	sw	a0,16(s0)
+20402a98:	fadff06f          	j	20402a44 <z_add_timeout+0xa0>
+			if (t->dticks > to->dticks) {
+				t->dticks -= to->dticks;
+				sys_dlist_insert(&t->node, &to->node);
+				break;
+			}
+			to->dticks -= t->dticks;
+20402a9c:	40e68733          	sub	a4,a3,a4
+20402aa0:	00e6b6b3          	sltu	a3,a3,a4
+20402aa4:	40a585b3          	sub	a1,a1,a0
+20402aa8:	40d586b3          	sub	a3,a1,a3
+20402aac:	00e42823          	sw	a4,16(s0)
+20402ab0:	00d42a23          	sw	a3,20(s0)
+	return (node == list->tail) ? NULL : node->next;
+20402ab4:	faf804e3          	beq	a6,a5,20402a5c <z_add_timeout+0xb8>
+20402ab8:	0007a783          	lw	a5,0(a5)
+		for (t = first(); t != NULL; t = next(t)) {
+20402abc:	fa0780e3          	beqz	a5,20402a5c <z_add_timeout+0xb8>
+			if (t->dticks > to->dticks) {
+20402ac0:	0147a503          	lw	a0,20(a5)
+20402ac4:	01442583          	lw	a1,20(s0)
+20402ac8:	0107a703          	lw	a4,16(a5)
+20402acc:	01042683          	lw	a3,16(s0)
+20402ad0:	00a5c663          	blt	a1,a0,20402adc <z_add_timeout+0x138>
+20402ad4:	fcb514e3          	bne	a0,a1,20402a9c <z_add_timeout+0xf8>
+20402ad8:	fce6f2e3          	bgeu	a3,a4,20402a9c <z_add_timeout+0xf8>
+				t->dticks -= to->dticks;
+20402adc:	40d706b3          	sub	a3,a4,a3
+20402ae0:	00d73733          	sltu	a4,a4,a3
+20402ae4:	40b505b3          	sub	a1,a0,a1
+20402ae8:	40e58733          	sub	a4,a1,a4
+20402aec:	00e7aa23          	sw	a4,20(a5)
+	sys_dnode_t *const prev = successor->prev;
+20402af0:	0047a703          	lw	a4,4(a5)
+20402af4:	00d7a823          	sw	a3,16(a5)
+	node->next = successor;
+20402af8:	00f42023          	sw	a5,0(s0)
+	node->prev = prev;
+20402afc:	00e42223          	sw	a4,4(s0)
+	prev->next = node;
+20402b00:	00872023          	sw	s0,0(a4)
+	successor->prev = node;
+20402b04:	0087a223          	sw	s0,4(a5)
+	return list->head == list;
+20402b08:	00062783          	lw	a5,0(a2)
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+20402b0c:	02c78263          	beq	a5,a2,20402b30 <z_add_timeout+0x18c>
+
+		if (t == NULL) {
+			sys_dlist_append(&timeout_list, &to->node);
+		}
+
+		if (to == first()) {
+20402b10:	02f41063          	bne	s0,a5,20402b30 <z_add_timeout+0x18c>
+			 * last announcement, and slice_ticks is based
+			 * on that. It means that the time remaining for
+			 * the next announcement can be less than
+			 * slice_ticks.
+			 */
+			int32_t next_time = next_timeout();
+20402b14:	db1ff0ef          	jal	ra,204028c4 <next_timeout>
+
+			if (next_time == 0 ||
+20402b18:	00050863          	beqz	a0,20402b28 <z_add_timeout+0x184>
+			    _current_cpu->slice_ticks != next_time) {
+20402b1c:	800007b7          	lui	a5,0x80000
+			if (next_time == 0 ||
+20402b20:	1387a783          	lw	a5,312(a5) # 80000138 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000139>
+20402b24:	00a78663          	beq	a5,a0,20402b30 <z_add_timeout+0x18c>
+				sys_clock_set_timeout(next_time, false);
+20402b28:	00000593          	li	a1,0
+20402b2c:	974ff0ef          	jal	ra,20401ca0 <sys_clock_set_timeout>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402b30:	30092973          	csrrs	s2,mstatus,s2
+#else
+			sys_clock_set_timeout(next_timeout(), false);
+#endif	/* CONFIG_TIMESLICING */
+		}
+	}
+}
+20402b34:	01c12083          	lw	ra,28(sp)
+20402b38:	01812403          	lw	s0,24(sp)
+20402b3c:	01412483          	lw	s1,20(sp)
+20402b40:	01012903          	lw	s2,16(sp)
+20402b44:	00c12983          	lw	s3,12(sp)
+20402b48:	02010113          	addi	sp,sp,32
+20402b4c:	00008067          	ret
+
+20402b50 <z_abort_timeout>:
+
+int z_abort_timeout(struct _timeout *to)
+{
+20402b50:	ff010113          	addi	sp,sp,-16
+20402b54:	00812423          	sw	s0,8(sp)
+20402b58:	00112623          	sw	ra,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402b5c:	00800413          	li	s0,8
+20402b60:	30043473          	csrrc	s0,mstatus,s0
+	int ret = -EINVAL;
+
+	LOCKED(&timeout_lock) {
+		if (sys_dnode_is_linked(&to->node)) {
+20402b64:	00052783          	lw	a5,0(a0)
+	key = (mstatus & MSTATUS_IEN);
+20402b68:	00847413          	andi	s0,s0,8
+20402b6c:	02078063          	beqz	a5,20402b8c <z_abort_timeout+0x3c>
+			remove_timeout(to);
+20402b70:	de1ff0ef          	jal	ra,20402950 <remove_timeout>
+			ret = 0;
+20402b74:	00000513          	li	a0,0
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402b78:	30042473          	csrrs	s0,mstatus,s0
+		}
+	}
+
+	return ret;
+}
+20402b7c:	00c12083          	lw	ra,12(sp)
+20402b80:	00812403          	lw	s0,8(sp)
+20402b84:	01010113          	addi	sp,sp,16
+20402b88:	00008067          	ret
+	int ret = -EINVAL;
+20402b8c:	fea00513          	li	a0,-22
+20402b90:	fe9ff06f          	j	20402b78 <z_abort_timeout+0x28>
+
+20402b94 <z_set_timeout_expiry>:
+	}
+	return ret;
+}
+
+void z_set_timeout_expiry(int32_t ticks, bool is_idle)
+{
+20402b94:	fe010113          	addi	sp,sp,-32
+20402b98:	00812c23          	sw	s0,24(sp)
+20402b9c:	00912a23          	sw	s1,20(sp)
+20402ba0:	00112e23          	sw	ra,28(sp)
+20402ba4:	00050493          	mv	s1,a0
+20402ba8:	00b12623          	sw	a1,12(sp)
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402bac:	00800413          	li	s0,8
+20402bb0:	30043473          	csrrc	s0,mstatus,s0
+	LOCKED(&timeout_lock) {
+		int next_to = next_timeout();
+20402bb4:	d11ff0ef          	jal	ra,204028c4 <next_timeout>
+		 * SMP can't use this optimization though: we don't
+		 * know when context switches happen until interrupt
+		 * exit and so can't get the timeslicing clamp folded
+		 * in.
+		 */
+		if (!imminent && (sooner || IS_ENABLED(CONFIG_SMP))) {
+20402bb8:	00100793          	li	a5,1
+	key = (mstatus & MSTATUS_IEN);
+20402bbc:	00847413          	andi	s0,s0,8
+20402bc0:	00a7da63          	bge	a5,a0,20402bd4 <z_set_timeout_expiry+0x40>
+20402bc4:	00c12583          	lw	a1,12(sp)
+20402bc8:	00954663          	blt	a0,s1,20402bd4 <z_set_timeout_expiry+0x40>
+			sys_clock_set_timeout(MIN(ticks, next_to), is_idle);
+20402bcc:	00048513          	mv	a0,s1
+20402bd0:	8d0ff0ef          	jal	ra,20401ca0 <sys_clock_set_timeout>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402bd4:	30042473          	csrrs	s0,mstatus,s0
+		}
+	}
+}
+20402bd8:	01c12083          	lw	ra,28(sp)
+20402bdc:	01812403          	lw	s0,24(sp)
+20402be0:	01412483          	lw	s1,20(sp)
+20402be4:	02010113          	addi	sp,sp,32
+20402be8:	00008067          	ret
+
+20402bec <sys_clock_announce>:
+
+void sys_clock_announce(int32_t ticks)
+{
+20402bec:	fd010113          	addi	sp,sp,-48
+20402bf0:	02812423          	sw	s0,40(sp)
+20402bf4:	02912223          	sw	s1,36(sp)
+20402bf8:	02112623          	sw	ra,44(sp)
+20402bfc:	03212023          	sw	s2,32(sp)
+20402c00:	01312e23          	sw	s3,28(sp)
+20402c04:	01412c23          	sw	s4,24(sp)
+20402c08:	00050493          	mv	s1,a0
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402c0c:	00800413          	li	s0,8
+#ifdef CONFIG_TIMESLICING
+	z_time_slice(ticks);
+20402c10:	8ddff0ef          	jal	ra,204024ec <z_time_slice>
+20402c14:	30043473          	csrrc	s0,mstatus,s0
+#endif
+
+	k_spinlock_key_t key = k_spin_lock(&timeout_lock);
+
+	announce_remaining = ticks;
+20402c18:	80000937          	lui	s2,0x80000
+20402c1c:	00992e23          	sw	s1,28(s2) # 8000001c <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x8000001d>
+
+	while (first() != NULL && first()->dticks <= announce_remaining) {
+		struct _timeout *t = first();
+		int dt = t->dticks;
+
+		curr_tick += dt;
+20402c20:	800004b7          	lui	s1,0x80000
+	key = (mstatus & MSTATUS_IEN);
+20402c24:	00847413          	andi	s0,s0,8
+	while (first() != NULL && first()->dticks <= announce_remaining) {
+20402c28:	01c90913          	addi	s2,s2,28
+	return list->head == list;
+20402c2c:	80418993          	addi	s3,gp,-2044 # 80000f54 <timeout_list>
+		curr_tick += dt;
+20402c30:	00848493          	addi	s1,s1,8 # 80000008 <CONFIG_SYSTEM_WORKQUEUE_PRIORITY+0x80000009>
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402c34:	00800a13          	li	s4,8
+	while (first() != NULL && first()->dticks <= announce_remaining) {
+20402c38:	00092783          	lw	a5,0(s2)
+20402c3c:	0009a503          	lw	a0,0(s3)
+		curr_tick += dt;
+20402c40:	0004a683          	lw	a3,0(s1)
+20402c44:	0044a883          	lw	a7,4(s1)
+20402c48:	41f7d593          	srai	a1,a5,0x1f
+	return sys_dlist_is_empty(list) ? NULL : list->head;
+20402c4c:	03350a63          	beq	a0,s3,20402c80 <sys_clock_announce+0x94>
+	while (first() != NULL && first()->dticks <= announce_remaining) {
+20402c50:	02050863          	beqz	a0,20402c80 <sys_clock_announce+0x94>
+20402c54:	01452603          	lw	a2,20(a0)
+20402c58:	01052703          	lw	a4,16(a0)
+20402c5c:	00c5c663          	blt	a1,a2,20402c68 <sys_clock_announce+0x7c>
+20402c60:	06b61663          	bne	a2,a1,20402ccc <sys_clock_announce+0xe0>
+20402c64:	06e7f463          	bgeu	a5,a4,20402ccc <sys_clock_announce+0xe0>
+		t->fn(t);
+		key = k_spin_lock(&timeout_lock);
+	}
+
+	if (first() != NULL) {
+		first()->dticks -= announce_remaining;
+20402c68:	40f70833          	sub	a6,a4,a5
+20402c6c:	01073733          	sltu	a4,a4,a6
+20402c70:	40b60633          	sub	a2,a2,a1
+20402c74:	40e60733          	sub	a4,a2,a4
+20402c78:	01052823          	sw	a6,16(a0)
+20402c7c:	00e52a23          	sw	a4,20(a0)
+	}
+
+	curr_tick += announce_remaining;
+20402c80:	00d786b3          	add	a3,a5,a3
+20402c84:	011585b3          	add	a1,a1,a7
+20402c88:	00f6b7b3          	sltu	a5,a3,a5
+20402c8c:	00b787b3          	add	a5,a5,a1
+20402c90:	00d4a023          	sw	a3,0(s1)
+20402c94:	00f4a223          	sw	a5,4(s1)
+	announce_remaining = 0;
+20402c98:	00092023          	sw	zero,0(s2)
+
+	sys_clock_set_timeout(next_timeout(), false);
+20402c9c:	c29ff0ef          	jal	ra,204028c4 <next_timeout>
+20402ca0:	00000593          	li	a1,0
+20402ca4:	ffdfe0ef          	jal	ra,20401ca0 <sys_clock_set_timeout>
+	__asm__ volatile ("csrrs %0, mstatus, %1"
+20402ca8:	30042473          	csrrs	s0,mstatus,s0
+
+	k_spin_unlock(&timeout_lock, key);
+}
+20402cac:	02c12083          	lw	ra,44(sp)
+20402cb0:	02812403          	lw	s0,40(sp)
+20402cb4:	02412483          	lw	s1,36(sp)
+20402cb8:	02012903          	lw	s2,32(sp)
+20402cbc:	01c12983          	lw	s3,28(sp)
+20402cc0:	01812a03          	lw	s4,24(sp)
+20402cc4:	03010113          	addi	sp,sp,48
+20402cc8:	00008067          	ret
+		curr_tick += dt;
+20402ccc:	00d706b3          	add	a3,a4,a3
+		announce_remaining -= dt;
+20402cd0:	40e787b3          	sub	a5,a5,a4
+		curr_tick += dt;
+20402cd4:	41f75593          	srai	a1,a4,0x1f
+20402cd8:	00e6b633          	sltu	a2,a3,a4
+20402cdc:	011585b3          	add	a1,a1,a7
+		announce_remaining -= dt;
+20402ce0:	00f92023          	sw	a5,0(s2)
+		t->dticks = 0;
+20402ce4:	00000813          	li	a6,0
+20402ce8:	00000793          	li	a5,0
+		curr_tick += dt;
+20402cec:	00b605b3          	add	a1,a2,a1
+		t->dticks = 0;
+20402cf0:	00f52823          	sw	a5,16(a0)
+20402cf4:	01052a23          	sw	a6,20(a0)
+		curr_tick += dt;
+20402cf8:	00d4a023          	sw	a3,0(s1)
+20402cfc:	00b4a223          	sw	a1,4(s1)
+		remove_timeout(t);
+20402d00:	00a12623          	sw	a0,12(sp)
+20402d04:	c4dff0ef          	jal	ra,20402950 <remove_timeout>
+20402d08:	30042473          	csrrs	s0,mstatus,s0
+		t->fn(t);
+20402d0c:	00c12503          	lw	a0,12(sp)
+20402d10:	00852783          	lw	a5,8(a0)
+20402d14:	000780e7          	jalr	a5
+	__asm__ volatile ("csrrc %0, mstatus, %1"
+20402d18:	300a3473          	csrrc	s0,mstatus,s4
+	key = (mstatus & MSTATUS_IEN);
+20402d1c:	00847413          	andi	s0,s0,8
+#endif
+
+#ifdef CONFIG_SPIN_VALIDATE
+	z_spin_lock_set_owner(l);
+#endif
+	return k;
+20402d20:	f19ff06f          	j	20402c38 <sys_clock_announce+0x4c>
+
+20402d24 <boot_banner>:
+#else
+	printk("*** Booting Zephyr OS version %s %s ***\n",
+	       KERNEL_VERSION_STRING, BOOT_DELAY_BANNER);
+#endif
+#endif
+}
+20402d24:	00008067          	ret
+
+20402d28 <z_device_state_init>:
+
+	while (dev < __device_end) {
+		z_object_init(dev);
+		++dev;
+	}
+}
+20402d28:	00008067          	ret
+
+20402d2c <z_sys_init_run_level>:
+		/* End marker */
+		__init_end,
+	};
+	const struct init_entry *entry;
+
+	for (entry = levels[level]; entry < levels[level+1]; entry++) {
+20402d2c:	00251713          	slli	a4,a0,0x2
+20402d30:	204037b7          	lui	a5,0x20403
+20402d34:	00150513          	addi	a0,a0,1
+20402d38:	21078793          	addi	a5,a5,528 # 20403210 <levels.0>
+20402d3c:	00251513          	slli	a0,a0,0x2
+{
+20402d40:	fe010113          	addi	sp,sp,-32
+	for (entry = levels[level]; entry < levels[level+1]; entry++) {
+20402d44:	00e78733          	add	a4,a5,a4
+20402d48:	00a78533          	add	a0,a5,a0
+{
+20402d4c:	00812c23          	sw	s0,24(sp)
+20402d50:	01212823          	sw	s2,16(sp)
+	for (entry = levels[level]; entry < levels[level+1]; entry++) {
+20402d54:	00072403          	lw	s0,0(a4)
+20402d58:	00052903          	lw	s2,0(a0)
+{
+20402d5c:	01312623          	sw	s3,12(sp)
+20402d60:	00112e23          	sw	ra,28(sp)
+20402d64:	00912a23          	sw	s1,20(sp)
+					rc = -rc;
+				}
+				if (rc > UINT8_MAX) {
+					rc = UINT8_MAX;
+				}
+				dev->state->init_res = rc;
+20402d68:	0ff00993          	li	s3,255
+	for (entry = levels[level]; entry < levels[level+1]; entry++) {
+20402d6c:	03246063          	bltu	s0,s2,20402d8c <z_sys_init_run_level+0x60>
+			}
+			dev->state->initialized = true;
+		}
+	}
+}
+20402d70:	01c12083          	lw	ra,28(sp)
+20402d74:	01812403          	lw	s0,24(sp)
+20402d78:	01412483          	lw	s1,20(sp)
+20402d7c:	01012903          	lw	s2,16(sp)
+20402d80:	00c12983          	lw	s3,12(sp)
+20402d84:	02010113          	addi	sp,sp,32
+20402d88:	00008067          	ret
+		const struct device *dev = entry->dev;
+20402d8c:	00442483          	lw	s1,4(s0)
+		int rc = entry->init(dev);
+20402d90:	00042783          	lw	a5,0(s0)
+20402d94:	00048513          	mv	a0,s1
+20402d98:	000780e7          	jalr	a5
+		if (dev != NULL) {
+20402d9c:	02048863          	beqz	s1,20402dcc <z_sys_init_run_level+0xa0>
+				dev->state->init_res = rc;
+20402da0:	00c4a783          	lw	a5,12(s1)
+			if (rc != 0) {
+20402da4:	00050e63          	beqz	a0,20402dc0 <z_sys_init_run_level+0x94>
+				if (rc < 0) {
+20402da8:	41f55713          	srai	a4,a0,0x1f
+20402dac:	00a74533          	xor	a0,a4,a0
+20402db0:	40e50533          	sub	a0,a0,a4
+				dev->state->init_res = rc;
+20402db4:	00a9d463          	bge	s3,a0,20402dbc <z_sys_init_run_level+0x90>
+20402db8:	0ff00513          	li	a0,255
+20402dbc:	00a78023          	sb	a0,0(a5)
+			dev->state->initialized = true;
+20402dc0:	0007d703          	lhu	a4,0(a5)
+20402dc4:	10076713          	ori	a4,a4,256
+20402dc8:	00e79023          	sh	a4,0(a5)
+	for (entry = levels[level]; entry < levels[level+1]; entry++) {
+20402dcc:	00840413          	addi	s0,s0,8
+20402dd0:	f9dff06f          	j	20402d6c <z_sys_init_run_level+0x40>

@@ -1,0 +1,27 @@
+# Available runners configured by board.cmake.
+runners:
+- hifive1
+
+# Default flash runner if --runner is not given.
+flash-runner: hifive1
+
+# Default debug runner if --runner is not given.
+debug-runner: qemu
+
+# Common runner configuration values.
+config:
+  board_dir: /home/arachidi/zephyrproject/zephyr/boards/riscv/artyA7
+  # Build outputs:
+  elf_file: zephyr.elf
+  bin_file: zephyr.bin
+  # Host tools:
+  gdb: /home/arachidi/zephyr-sdk-0.13.2/riscv64-zephyr-elf/bin/riscv64-zephyr-elf-gdb
+  openocd: /home/arachidi/Downloads/riscv-openocd/bin/openocd
+  openocd_search:
+    - /home/arachidi/zephyr-sdk-0.13.2/sysroots/x86_64-pokysdk-linux/usr/share/openocd/scripts
+
+# Runner specific arguments
+args:
+  hifive1:
+    []
+

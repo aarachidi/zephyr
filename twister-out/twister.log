@@ -1,0 +1,108 @@
+2022-02-11 06:23:47,639 - twister - INFO - Zephyr version: v2.7.99-2893-gc9a3dae6519f
+2022-02-11 06:23:47,639 - twister - INFO - JOBS: 2
+2022-02-11 06:23:47,640 - twister - DEBUG - Reading test case configuration files under /home/arachidi/zephyrproject/zephyr/tests/kernel...
+2022-02-11 06:23:47,641 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/condvar/condvar_api
+2022-02-11 06:23:47,648 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/semaphore/semaphore
+2022-02-11 06:23:47,652 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/semaphore/sys_sem
+2022-02-11 06:23:47,655 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/poll
+2022-02-11 06:23:47,658 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mutex/sys_mutex
+2022-02-11 06:23:47,662 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mutex/mutex_error_case
+2022-02-11 06:23:47,665 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mutex/mutex_api
+2022-02-11 06:23:47,667 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/smp_boot_delay
+2022-02-11 06:23:47,669 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/mem_protect
+2022-02-11 06:23:47,684 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/protection
+2022-02-11 06:23:47,686 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/syscalls
+2022-02-11 06:23:47,688 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/userspace
+2022-02-11 06:23:47,695 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/obj_validation
+2022-02-11 06:23:47,698 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/demand_paging
+2022-02-11 06:23:47,703 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/mem_map
+2022-02-11 06:23:47,708 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/sys_sem
+2022-02-11 06:23:47,712 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/stackprot
+2022-02-11 06:23:47,714 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/stack_random
+2022-02-11 06:23:47,716 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_protect/futex
+2022-02-11 06:23:47,718 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/early_sleep
+2022-02-11 06:23:47,721 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/lifo/lifo_usage
+2022-02-11 06:23:47,724 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/lifo/lifo_api
+2022-02-11 06:23:47,727 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/context
+2022-02-11 06:23:47,732 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/queue
+2022-02-11 06:23:47,736 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/obj_tracking
+2022-02-11 06:23:47,737 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fatal/exception
+2022-02-11 06:23:47,744 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fatal/no-multithreading
+2022-02-11 06:23:47,748 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fatal/message_capture
+2022-02-11 06:23:47,750 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/dynamic_thread
+2022-02-11 06:23:47,752 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/tls
+2022-02-11 06:23:47,755 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/thread_stack
+2022-02-11 06:23:47,759 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/no-multithreading
+2022-02-11 06:23:47,761 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/thread_error_case
+2022-02-11 06:23:47,763 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/thread_apis
+2022-02-11 06:23:47,769 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/threads/thread_init
+2022-02-11 06:23:47,772 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/sleep
+2022-02-11 06:23:47,774 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/stack/stack
+2022-02-11 06:23:47,777 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/common
+2022-02-11 06:23:47,797 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/device
+2022-02-11 06:23:47,803 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/profiling/profiling_api
+2022-02-11 06:23:47,805 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/spinlock
+2022-02-11 06:23:47,806 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/gen_isr_table
+2022-02-11 06:23:47,813 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/workq/work
+2022-02-11 06:23:47,822 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/workq/user_work
+2022-02-11 06:23:47,824 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/workq/work_queue
+2022-02-11 06:23:47,828 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/workq/critical
+2022-02-11 06:23:47,832 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mbox/mbox_api
+2022-02-11 06:23:47,837 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mbox/mbox_usage
+2022-02-11 06:23:47,839 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/interrupt
+2022-02-11 06:23:47,847 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/smp
+2022-02-11 06:23:47,852 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/timer/starve
+2022-02-11 06:23:47,855 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/timer/timer_monotonic
+2022-02-11 06:23:47,857 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/timer/timer_api
+2022-02-11 06:23:47,864 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/timer/cycle64
+2022-02-11 06:23:47,866 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/timer/timer_error_case
+2022-02-11 06:23:47,868 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/tickless/tickless_concept
+2022-02-11 06:23:47,870 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_slab/mslab_concept
+2022-02-11 06:23:47,873 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_slab/mslab
+2022-02-11 06:23:47,876 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_slab/mslab_threadsafe
+2022-02-11 06:23:47,878 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_slab/mslab_api
+2022-02-11 06:23:47,882 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mp
+2022-02-11 06:23:47,885 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fpu_sharing/float_disable
+2022-02-11 06:23:47,890 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fpu_sharing/generic
+2022-02-11 06:23:47,901 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/pipe/pipe_api
+2022-02-11 06:23:47,904 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/pipe/pipe
+2022-02-11 06:23:47,907 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/pending
+2022-02-11 06:23:47,910 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_heap/k_heap_api
+2022-02-11 06:23:47,912 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_heap/shared_multi_heap
+2022-02-11 06:23:47,914 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/mem_heap/mheap_api_concept
+2022-02-11 06:23:47,918 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/events/sys_event
+2022-02-11 06:23:47,921 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/events/event_api
+2022-02-11 06:23:47,924 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/sched/metairq
+2022-02-11 06:23:47,927 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/sched/deadline
+2022-02-11 06:23:47,929 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/sched/preempt
+2022-02-11 06:23:47,932 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/sched/schedule_api
+2022-02-11 06:23:47,948 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/msgq/msgq_usage
+2022-02-11 06:23:47,950 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/msgq/msgq_api
+2022-02-11 06:23:47,954 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fifo/fifo_timeout
+2022-02-11 06:23:47,957 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fifo/fifo_api
+2022-02-11 06:23:47,961 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/fifo/fifo_usage
+2022-02-11 06:23:47,963 - twister - DEBUG - Found possible test case in /home/arachidi/zephyrproject/zephyr/tests/kernel/xip
+2022-02-11 06:23:47,965 - twister - DEBUG - Reading platform configuration files under /home/arachidi/zephyrproject/zephyr/boards...
+2022-02-11 06:23:48,349 - twister - DEBUG - Reading platform configuration files under /home/arachidi/zephyrproject/zephyr/scripts/pylib/twister/boards...
+2022-02-11 06:23:48,352 - twister - DEBUG - Running cmake script /home/arachidi/zephyrproject/zephyr/cmake/verify-toolchain.cmake
+2022-02-11 06:23:48,352 - twister - DEBUG - Calling cmake with arguments: ['-DFORMAT=json', '-P', PosixPath('/home/arachidi/zephyrproject/zephyr/cmake/verify-toolchain.cmake')]
+2022-02-11 06:23:48,360 - twister - DEBUG - Finished running  /home/arachidi/zephyrproject/zephyr/cmake/verify-toolchain.cmake
+2022-02-11 06:23:48,361 - twister - INFO - Using 'zephyr' toolchain.
+2022-02-11 06:23:48,361 - twister - DEBUG - platform filter: ['hifive1']
+2022-02-11 06:23:48,361 - twister - DEBUG -     arch_filter: None
+2022-02-11 06:23:48,361 - twister - DEBUG -      tag_filter: None
+2022-02-11 06:23:48,361 - twister - DEBUG -     exclude_tag: None
+2022-02-11 06:23:48,361 - twister - INFO - Building initial testcase list...
+2022-02-11 06:23:48,385 - twister - INFO - 167 test scenarios (167 configurations) selected, 167 configurations discarded due to filters.
+2022-02-11 06:23:48,407 - twister - INFO - Adding tasks to the queue...
+2022-02-11 06:23:48,408 - twister - INFO - Added initial list of jobs to queue
+2022-02-11 06:23:48,408 - twister - DEBUG - Launch process 0
+2022-02-11 06:23:48,410 - twister - DEBUG - Launch process 1
+2022-02-11 06:23:48,433 - twister - DEBUG - running footprint_reports
+2022-02-11 06:23:48,663 - twister - INFO - [32m0 of 0[39m test configurations passed (0.00%), [39m0[39m failed, 167 skipped with [39m0[39m warnings in 1.06 seconds
+2022-02-11 06:23:48,663 - twister - INFO - In total 0 test cases were executed, 1630 skipped on 0 out of total 418 platforms (0.00%)
+2022-02-11 06:23:48,664 - twister - INFO - [32m0[39m test configurations executed on platforms, [31m0[39m test configurations were only built.
+2022-02-11 06:23:48,664 - twister - INFO - Saving reports...
+2022-02-11 06:23:48,664 - twister - INFO - Writing xunit report /home/arachidi/zephyrproject/zephyr/twister-out/twister.xml...
+2022-02-11 06:23:48,673 - twister - INFO - Writing xunit report /home/arachidi/zephyrproject/zephyr/twister-out/twister_report.xml...
+2022-02-11 06:23:48,966 - twister - INFO - Run completed
