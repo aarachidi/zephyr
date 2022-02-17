@@ -2014,7 +2014,7 @@ device_handles  0x00000000204042fc       0x18
                 0x000000002040430e                __devicehdl_DT_N_S_soc_S_gpio_10012000
                 0x0000000020404314                __device_handles_end = .
 
-rodata          0x0000000020404314      0x310
+rodata          0x0000000020404314      0x304
                 0x0000000020404314                . = ALIGN (0x4)
  *(SORT_BY_ALIGNMENT(.srodata))
  *(SORT_BY_ALIGNMENT(.srodata.*))
@@ -2060,13 +2060,13 @@ rodata          0x0000000020404314      0x310
                 0x00000000204045d8        0x5 zephyr/kernel/libkernel.a(init.c.obj)
  *fill*         0x00000000204045dd        0x3 
  .rodata.boot_banner.str1.4
-                0x00000000204045e0       0x43 zephyr/kernel/libkernel.a(banner.c.obj)
-                                         0x47 (size before relaxing)
+                0x00000000204045e0       0x37 zephyr/kernel/libkernel.a(banner.c.obj)
+                                         0x3b (size before relaxing)
  *(SORT_BY_ALIGNMENT(.gnu.linkonce.r.*))
  *(SORT_BY_ALIGNMENT(.sdata2) SORT_BY_ALIGNMENT(.sdata2.*) SORT_BY_ALIGNMENT(.gnu.linkonce.s2.*))
-                0x0000000020404624                . = ALIGN (0x4)
- *fill*         0x0000000020404623        0x1 
-                0x0000000020404624                __rodata_region_end = .
+                0x0000000020404618                . = ALIGN (0x4)
+ *fill*         0x0000000020404617        0x1 
+                0x0000000020404618                __rodata_region_end = .
 
 bss             0x0000000080000000      0x158
                 0x0000000080000000                . = ALIGN (0x4)
@@ -2126,7 +2126,7 @@ noinit          0x0000000080000160      0xe00
                 0x0000000080000760      0x800 zephyr/kernel/libkernel.a(init.c.obj)
                 0x0000000080000760                z_interrupt_stacks
 
-datas           0x0000000080000f60       0xd0 load address 0x0000000020404624
+datas           0x0000000080000f60       0xd0 load address 0x0000000020404618
                 0x0000000080000f60                . = ALIGN (0x4)
                 0x0000000080000f60                __data_region_start = .
                 0x0000000080000f60                __data_start = .
@@ -2154,10 +2154,10 @@ datas           0x0000000080000f60       0xd0 load address 0x0000000020404624
                 0x0000000080001028        0x8 zephyr/kernel/libkernel.a(timeout.c.obj)
                 0x0000000080001030                __data_end = .
                 0x00000000000000d0                __data_size = (__data_end - __data_start)
-                0x0000000020404624                __data_load_start = LOADADDR (datas)
-                0x0000000020404624                __data_region_load_start = LOADADDR (datas)
+                0x0000000020404618                __data_load_start = LOADADDR (datas)
+                0x0000000020404618                __data_region_load_start = LOADADDR (datas)
 
-device_states   0x0000000080001030       0x10 load address 0x00000000204046f4
+device_states   0x0000000080001030       0x10 load address 0x00000000204046e8
                 0x0000000080001030                __device_states_start = .
  *(SORT_BY_ALIGNMENT(.z_devstate))
  .z_devstate    0x0000000080001030        0x4 zephyr/drivers/gpio/libdrivers__gpio.a(gpio_sifive.c.obj)
@@ -2166,7 +2166,7 @@ device_states   0x0000000080001030       0x10 load address 0x00000000204046f4
  *(SORT_BY_ALIGNMENT(.z_devstate.*))
                 0x0000000080001040                __device_states_end = .
 
-initshell       0x0000000080001040        0x0 load address 0x0000000020404704
+initshell       0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                __shell_module_start = .
  *(SORT_BY_ALIGNMENT(.shell_module_*))
                 0x0000000080001040                __shell_module_end = .
@@ -2175,86 +2175,86 @@ initshell       0x0000000080001040        0x0 load address 0x0000000020404704
                 0x0000000080001040                __shell_cmd_end = .
 
 log_dynamic_sections
-                0x0000000080001040        0x0 load address 0x0000000020404704
+                0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                __log_dynamic_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(.log_dynamic_*)))
                 0x0000000080001040                __log_dynamic_end = .
 
 _static_thread_data_area
-                0x0000000080001040        0x0 load address 0x0000000020404704
+                0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                __static_thread_data_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(.__static_thread_data.static.*)))
                 0x0000000080001040                __static_thread_data_list_end = .
 
-k_timer_area    0x0000000080001040        0x0 load address 0x0000000020404704
+k_timer_area    0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_timer_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_timer.static.*)))
                 0x0000000080001040                _k_timer_list_end = .
 
 k_mem_slab_area
-                0x0000000080001040        0x0 load address 0x0000000020404704
+                0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_mem_slab_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_mem_slab.static.*)))
                 0x0000000080001040                _k_mem_slab_list_end = .
 
 k_mem_pool_area
-                0x0000000080001040        0x0 load address 0x0000000020404704
+                0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_mem_pool_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_mem_pool.static.*)))
                 0x0000000080001040                _k_mem_pool_list_end = .
 
-k_heap_area     0x0000000080001040        0x0 load address 0x0000000020404704
+k_heap_area     0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_heap_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_heap.static.*)))
                 0x0000000080001040                _k_heap_list_end = .
 
-k_mutex_area    0x0000000080001040        0x0 load address 0x0000000020404704
+k_mutex_area    0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_mutex_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_mutex.static.*)))
                 0x0000000080001040                _k_mutex_list_end = .
 
-k_stack_area    0x0000000080001040        0x0 load address 0x0000000020404704
+k_stack_area    0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_stack_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_stack.static.*)))
                 0x0000000080001040                _k_stack_list_end = .
 
-k_msgq_area     0x0000000080001040        0x0 load address 0x0000000020404704
+k_msgq_area     0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_msgq_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_msgq.static.*)))
                 0x0000000080001040                _k_msgq_list_end = .
 
-k_mbox_area     0x0000000080001040        0x0 load address 0x0000000020404704
+k_mbox_area     0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_mbox_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_mbox.static.*)))
                 0x0000000080001040                _k_mbox_list_end = .
 
-k_pipe_area     0x0000000080001040        0x0 load address 0x0000000020404704
+k_pipe_area     0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_pipe_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_pipe.static.*)))
                 0x0000000080001040                _k_pipe_list_end = .
 
-k_sem_area      0x0000000080001040        0x0 load address 0x0000000020404704
+k_sem_area      0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_sem_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_sem.static.*)))
                 0x0000000080001040                _k_sem_list_end = .
 
-k_event_area    0x0000000080001040        0x0 load address 0x0000000020404704
+k_event_area    0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_event_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_event.static.*)))
                 0x0000000080001040                _k_event_list_end = .
 
-k_queue_area    0x0000000080001040        0x0 load address 0x0000000020404704
+k_queue_area    0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_queue_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_queue.static.*)))
                 0x0000000080001040                _k_queue_list_end = .
 
-k_condvar_area  0x0000000080001040        0x0 load address 0x0000000020404704
+k_condvar_area  0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _k_condvar_list_start = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._k_condvar.static.*)))
                 0x0000000080001040                _k_condvar_list_end = .
 
 _net_buf_pool_area
-                0x0000000080001040        0x0 load address 0x0000000020404704
+                0x0000000080001040        0x0 load address 0x00000000204046f8
                 0x0000000080001040                _net_buf_pool_list = .
  *(SORT_BY_NAME(SORT_BY_ALIGNMENT(._net_buf_pool.static.*)))
                 0x0000000080001040                __data_region_end = .
@@ -2507,7 +2507,7 @@ _net_buf_pool_area
  .debug_abbrev  0x0000000000004b65      0x4c2 zephyr/kernel/libkernel.a(timeout.c.obj)
  .debug_abbrev  0x0000000000005027       0xb8 zephyr/kernel/libkernel.a(banner.c.obj)
 
-.debug_line     0x0000000000000000    0x11ffc
+.debug_line     0x0000000000000000    0x1200e
  *(SORT_BY_ALIGNMENT(.debug_line) SORT_BY_ALIGNMENT(.debug_line.*) SORT_BY_ALIGNMENT(.debug_line_end))
  .debug_line    0x0000000000000000       0xec zephyr/CMakeFiles/zephyr_final.dir/dev_handles.c.obj
  .debug_line    0x00000000000000ec       0x9c zephyr/CMakeFiles/zephyr_final.dir/isr_tables.c.obj
@@ -2516,38 +2516,38 @@ _net_buf_pool_area
  .debug_line    0x000000000000045a      0x50b zephyr/libzephyr.a(printk.c.obj)
  .debug_line    0x0000000000000965      0x36e zephyr/libzephyr.a(thread_entry.c.obj)
  .debug_line    0x0000000000000cd3     0x16d2 zephyr/libzephyr.a(cbprintf_complete.c.obj)
- .debug_line    0x00000000000023a5      0x441 zephyr/libzephyr.a(configs.c.obj)
- .debug_line    0x00000000000027e6      0x1f0 zephyr/libzephyr.a(idle.c.obj)
- .debug_line    0x00000000000029d6       0xc5 zephyr/libzephyr.a(soc_irq.S.obj)
- .debug_line    0x0000000000002a9b      0x45c zephyr/libzephyr.a(soc_common_irq.c.obj)
- .debug_line    0x0000000000002ef7       0x90 zephyr/libzephyr.a(vector.S.obj)
- .debug_line    0x0000000000002f87       0x7c zephyr/libzephyr.a(tracing_none.c.obj)
- .debug_line    0x0000000000003003      0x376 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(fatal.c.obj)
- .debug_line    0x0000000000003379      0x2e4 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(irq_manage.c.obj)
- .debug_line    0x000000000000365d      0x223 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(isr.S.obj)
- .debug_line    0x0000000000003880      0x13a zephyr/arch/arch/riscv/core/libarch__riscv__core.a(prep_c.c.obj)
- .debug_line    0x00000000000039ba       0xac zephyr/arch/arch/riscv/core/libarch__riscv__core.a(reset.S.obj)
- .debug_line    0x0000000000003a66       0xa6 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(swap.S.obj)
- .debug_line    0x0000000000003b0c      0x375 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(thread.c.obj)
- .debug_line    0x0000000000003e81      0xa7b zephyr/lib/libc/minimal/liblib__libc__minimal.a(string.c.obj)
- .debug_line    0x00000000000048fc      0x4cb zephyr/lib/libc/minimal/liblib__libc__minimal.a(stdout_console.c.obj)
- .debug_line    0x0000000000004dc7      0x600 zephyr/drivers/interrupt_controller/libdrivers__interrupt_controller.a(intc_plic.c.obj)
- .debug_line    0x00000000000053c7      0x429 zephyr/drivers/console/libdrivers__console.a(uart_console.c.obj)
- .debug_line    0x00000000000057f0     0x11c7 zephyr/drivers/gpio/libdrivers__gpio.a(gpio_sifive.c.obj)
- .debug_line    0x00000000000069b7     0x198f zephyr/drivers/spi/libdrivers__spi.a(spi_sifive.c.obj)
- .debug_line    0x0000000000008346      0x368 zephyr/drivers/serial/libdrivers__serial.a(uart_sifive.c.obj)
- .debug_line    0x00000000000086ae      0x8df zephyr/drivers/timer/libdrivers__timer.a(riscv_machine_timer.c.obj)
- .debug_line    0x0000000000008f8d      0x7d5 zephyr/kernel/libkernel.a(device.c.obj)
- .debug_line    0x0000000000009762      0x341 zephyr/kernel/libkernel.a(errno.c.obj)
- .debug_line    0x0000000000009aa3      0x66b zephyr/kernel/libkernel.a(fatal.c.obj)
- .debug_line    0x000000000000a10e      0x87c zephyr/kernel/libkernel.a(init.c.obj)
- .debug_line    0x000000000000a98a      0xedb zephyr/kernel/libkernel.a(thread.c.obj)
- .debug_line    0x000000000000b865      0x2d3 zephyr/kernel/libkernel.a(idle.c.obj)
- .debug_line    0x000000000000bb38      0x872 zephyr/kernel/libkernel.a(sem.c.obj)
- .debug_line    0x000000000000c3aa     0x43e5 zephyr/kernel/libkernel.a(sched.c.obj)
- .debug_line    0x000000000001078f      0x119 zephyr/kernel/libkernel.a(xip.c.obj)
- .debug_line    0x00000000000108a8     0x15fd zephyr/kernel/libkernel.a(timeout.c.obj)
- .debug_line    0x0000000000011ea5      0x157 zephyr/kernel/libkernel.a(banner.c.obj)
+ .debug_line    0x00000000000023a5      0x453 zephyr/libzephyr.a(configs.c.obj)
+ .debug_line    0x00000000000027f8      0x1f0 zephyr/libzephyr.a(idle.c.obj)
+ .debug_line    0x00000000000029e8       0xc5 zephyr/libzephyr.a(soc_irq.S.obj)
+ .debug_line    0x0000000000002aad      0x45c zephyr/libzephyr.a(soc_common_irq.c.obj)
+ .debug_line    0x0000000000002f09       0x90 zephyr/libzephyr.a(vector.S.obj)
+ .debug_line    0x0000000000002f99       0x7c zephyr/libzephyr.a(tracing_none.c.obj)
+ .debug_line    0x0000000000003015      0x376 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(fatal.c.obj)
+ .debug_line    0x000000000000338b      0x2e4 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(irq_manage.c.obj)
+ .debug_line    0x000000000000366f      0x223 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(isr.S.obj)
+ .debug_line    0x0000000000003892      0x13a zephyr/arch/arch/riscv/core/libarch__riscv__core.a(prep_c.c.obj)
+ .debug_line    0x00000000000039cc       0xac zephyr/arch/arch/riscv/core/libarch__riscv__core.a(reset.S.obj)
+ .debug_line    0x0000000000003a78       0xa6 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(swap.S.obj)
+ .debug_line    0x0000000000003b1e      0x375 zephyr/arch/arch/riscv/core/libarch__riscv__core.a(thread.c.obj)
+ .debug_line    0x0000000000003e93      0xa7b zephyr/lib/libc/minimal/liblib__libc__minimal.a(string.c.obj)
+ .debug_line    0x000000000000490e      0x4cb zephyr/lib/libc/minimal/liblib__libc__minimal.a(stdout_console.c.obj)
+ .debug_line    0x0000000000004dd9      0x600 zephyr/drivers/interrupt_controller/libdrivers__interrupt_controller.a(intc_plic.c.obj)
+ .debug_line    0x00000000000053d9      0x429 zephyr/drivers/console/libdrivers__console.a(uart_console.c.obj)
+ .debug_line    0x0000000000005802     0x11c7 zephyr/drivers/gpio/libdrivers__gpio.a(gpio_sifive.c.obj)
+ .debug_line    0x00000000000069c9     0x198f zephyr/drivers/spi/libdrivers__spi.a(spi_sifive.c.obj)
+ .debug_line    0x0000000000008358      0x368 zephyr/drivers/serial/libdrivers__serial.a(uart_sifive.c.obj)
+ .debug_line    0x00000000000086c0      0x8df zephyr/drivers/timer/libdrivers__timer.a(riscv_machine_timer.c.obj)
+ .debug_line    0x0000000000008f9f      0x7d5 zephyr/kernel/libkernel.a(device.c.obj)
+ .debug_line    0x0000000000009774      0x341 zephyr/kernel/libkernel.a(errno.c.obj)
+ .debug_line    0x0000000000009ab5      0x66b zephyr/kernel/libkernel.a(fatal.c.obj)
+ .debug_line    0x000000000000a120      0x87c zephyr/kernel/libkernel.a(init.c.obj)
+ .debug_line    0x000000000000a99c      0xedb zephyr/kernel/libkernel.a(thread.c.obj)
+ .debug_line    0x000000000000b877      0x2d3 zephyr/kernel/libkernel.a(idle.c.obj)
+ .debug_line    0x000000000000bb4a      0x872 zephyr/kernel/libkernel.a(sem.c.obj)
+ .debug_line    0x000000000000c3bc     0x43e5 zephyr/kernel/libkernel.a(sched.c.obj)
+ .debug_line    0x00000000000107a1      0x119 zephyr/kernel/libkernel.a(xip.c.obj)
+ .debug_line    0x00000000000108ba     0x15fd zephyr/kernel/libkernel.a(timeout.c.obj)
+ .debug_line    0x0000000000011eb7      0x157 zephyr/kernel/libkernel.a(banner.c.obj)
 
 .debug_frame    0x0000000000000000     0x194c
  *(SORT_BY_ALIGNMENT(.debug_frame))
@@ -2969,9 +2969,9 @@ _net_buf_pool_area
                 0x0000000000000f4c       0x26 /home/arachidi/zephyr-sdk-0.13.2/riscv64-zephyr-elf/bin/../lib/gcc/riscv64-zephyr-elf/10.3.0/libgcc.a(_ashldi3.o)
  *(SORT_BY_ALIGNMENT(.gnu.attributes))
 
-.last_section   0x0000000020404704        0x0
-                0x0000000020404704                __rom_region_end = LOADADDR (.last_section)
-                0x0000000000004704                __rom_region_size = (__rom_region_end - __rom_region_start)
+.last_section   0x00000000204046f8        0x0
+                0x00000000204046f8                __rom_region_end = LOADADDR (.last_section)
+                0x00000000000046f8                __rom_region_size = (__rom_region_end - __rom_region_start)
 LOAD app/libapp.a
 LOAD zephyr/libzephyr.a
 LOAD zephyr/arch/common/libarch__common.a

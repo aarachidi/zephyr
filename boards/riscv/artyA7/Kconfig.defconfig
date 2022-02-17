@@ -13,6 +13,9 @@ config SPI_SIFIVE
 	
 config SERIAL_HAS_DRIVER
     	default y
+
+config SERIAL_SUPPORT_INTERRUPT
+	default y
 	
 
 config UART_SIFIVE
@@ -21,6 +24,12 @@ config UART_SIFIVE
 	
 
 config GPIO_SIFIVE
+	default y
+
+config WDT_SIFIVE
+	default y
+
+config I2C_SIFIVE
 	default y
 
 

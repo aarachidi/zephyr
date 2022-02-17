@@ -1929,7 +1929,7 @@ static inline int isdigit(int a)
 20401328:	04f10123          	sb	a5,66(sp)
 		if (conv->length_mod == LENGTH_UPPER_L) {
 2040132c:	000087b7          	lui	a5,0x8
-20401330:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x30fc>
+20401330:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x3108>
 20401334:	00f6f7b3          	and	a5,a3,a5
 20401338:	01079793          	slli	a5,a5,0x10
 2040133c:	0107d793          	srli	a5,a5,0x10
@@ -1947,7 +1947,7 @@ static inline int isdigit(int a)
 		if (conv->length_mod != LENGTH_NONE) {
 2040135c:	04015703          	lhu	a4,64(sp)
 20401360:	000087b7          	lui	a5,0x8
-20401364:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x30fc>
+20401364:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x3108>
 20401368:	00e7f7b3          	and	a5,a5,a4
 2040136c:	00f037b3          	snez	a5,a5
 20401370:	e59ff06f          	j	204011c8 <cbvprintf+0x404>
@@ -1966,7 +1966,7 @@ static inline int isdigit(int a)
 20401394:	04f10123          	sb	a5,66(sp)
 		if (conv->length_mod == LENGTH_UPPER_L) {
 20401398:	000087b7          	lui	a5,0x8
-2040139c:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x30fc>
+2040139c:	80078793          	addi	a5,a5,-2048 # 7800 <__rom_region_size+0x3108>
 204013a0:	00e7f7b3          	and	a5,a5,a4
 204013a4:	ffffc737          	lui	a4,0xffffc
 204013a8:	00e787b3          	add	a5,a5,a4
@@ -2337,7 +2337,7 @@ static inline int isdigit(int a)
 				conv->altform_0c = true;
 204017cc:	04215703          	lhu	a4,66(sp)
 204017d0:	000086b7          	lui	a3,0x8
-204017d4:	81068693          	addi	a3,a3,-2032 # 7810 <__rom_region_size+0x310c>
+204017d4:	81068693          	addi	a3,a3,-2032 # 7810 <__rom_region_size+0x3118>
 204017d8:	0ef77713          	andi	a4,a4,239
 204017dc:	00d76733          	or	a4,a4,a3
 				bps = encode_uint((uintptr_t)value->ptr, conv,
@@ -6745,7 +6745,7 @@ void z_data_copy(void)
 20403b58:	83818793          	addi	a5,gp,-1992 # 80001040 <__data_region_end>
 20403b5c:	204045b7          	lui	a1,0x20404
 20403b60:	40c78633          	sub	a2,a5,a2
-20403b64:	62458593          	addi	a1,a1,1572 # 20404624 <__data_load_start>
+20403b64:	61858593          	addi	a1,a1,1560 # 20404618 <__data_load_start>
 20403b68:	f6050513          	addi	a0,a0,-160
 20403b6c:	f1dfd06f          	j	20401a88 <memcpy>
 
@@ -7332,5 +7332,5 @@ static inline uint32_t arch_k_cycle_get_32(void)
 20404050:	20404537          	lui	a0,0x20404
 20404054:	44060613          	addi	a2,a2,1088 # 20404440 <__clz_tab+0x118>
 20404058:	5e058593          	addi	a1,a1,1504 # 204045e0 <levels.0+0x1c>
-2040405c:	5fc50513          	addi	a0,a0,1532 # 204045fc <levels.0+0x38>
+2040405c:	5f050513          	addi	a0,a0,1520 # 204045f0 <levels.0+0x2c>
 20404060:	b31fc06f          	j	20400b90 <printk>
