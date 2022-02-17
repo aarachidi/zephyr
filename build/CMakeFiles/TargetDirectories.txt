@@ -72,6 +72,9 @@
 /home/arachidi/zephyrproject/zephyr/build/zephyr/soc/riscv/riscv-privilege/E310ARTYA7/CMakeFiles/rebuild_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/boards/CMakeFiles/edit_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/boards/CMakeFiles/rebuild_cache.dir
+/home/arachidi/zephyrproject/zephyr/build/zephyr/boards/riscv/artyA7/CMakeFiles/boards__riscv__artyA7.dir
+/home/arachidi/zephyrproject/zephyr/build/zephyr/boards/riscv/artyA7/CMakeFiles/edit_cache.dir
+/home/arachidi/zephyrproject/zephyr/build/zephyr/boards/riscv/artyA7/CMakeFiles/rebuild_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/subsys/CMakeFiles/edit_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/subsys/CMakeFiles/rebuild_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/subsys/debug/CMakeFiles/edit_cache.dir
@@ -127,6 +130,8 @@
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/gpio/CMakeFiles/drivers__gpio.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/gpio/CMakeFiles/edit_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/gpio/CMakeFiles/rebuild_cache.dir
+/home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/pinmux/CMakeFiles/edit_cache.dir
+/home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/pinmux/CMakeFiles/rebuild_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/spi/CMakeFiles/drivers__spi.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/spi/CMakeFiles/edit_cache.dir
 /home/arachidi/zephyrproject/zephyr/build/zephyr/drivers/spi/CMakeFiles/rebuild_cache.dir

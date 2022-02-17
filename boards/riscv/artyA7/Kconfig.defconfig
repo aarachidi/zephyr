@@ -21,6 +21,9 @@ config SERIAL_SUPPORT_INTERRUPT
 config UART_SIFIVE
 	bool
 	default y
+
+config PINMUX_SIFIVE
+	default y
 	
 
 config GPIO_SIFIVE
