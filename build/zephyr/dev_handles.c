@@ -13,6 +13,9 @@ __devicehdl_DT_N_S_soc_S_gpio_10012000_S_pinctrl_10012038[] = { 2, DEVICE_HANDLE
  *   - (/soc)
  *   - (/soc/interrupt-controller@c000000)
  * Supported:
+ *   - (/leds/led_0)
+ *   - (/leds/led_1)
+ *   - (/leds/led_2)
  *   - /soc/gpio@10012000/pinctrl@10012038
  */
 const device_handle_t __aligned(2) __attribute__((__section__(".__device_handles_pass2")))

@@ -88,6 +88,7 @@
 			#address-cells = < 0x1 >;
 			#size-cells = < 0x1 >;
 			ranges;
+			phandle = < 0x9 >;
 			pinctrl: pinctrl@10012038 {
 				compatible = "sifive,iof";
 				reg = < 0x10012038 0x8 >;
@@ -155,7 +156,6 @@
 			sifive,compare-width = < 0x10 >;
 			#pwm-cells = < 0x2 >;
 			clock-frequency = < 0xf42400 >;
-			phandle = < 0x9 >;
 		};
 		pwm2: pwm@10035000 {
 			compatible = "sifive,pwm0";
@@ -254,9 +254,9 @@
 		};
 	};
 	aliases {
-		pwm-led0 = &led0;
-		pwm-led1 = &led1;
-		pwm-led2 = &led2;
+		led0 = &led0;
+		led1 = &led1;
+		led2 = &led2;
 	};
 	chosen {
 		zephyr,console = &uart0;
@@ -265,18 +265,18 @@
 		zephyr,flash = &flash0;
 	};
 	leds {
-		compatible = "pwm-leds";
+		compatible = "gpio-leds";
 		led0: led_0 {
-			pwms = < &pwm1 0x1 0x0 >;
-			label = "Green LED";
+			gpios = < &gpio0 0x13 0x0 >;
+			label = "red LED1";
 		};
 		led1: led_1 {
-			pwms = < &pwm1 0x2 0x0 >;
-			label = "Blue LED";
+			gpios = < &gpio0 0xd 0x0 >;
+			label = "Blue LED 2";
 		};
 		led2: led_2 {
-			pwms = < &pwm1 0x3 0x0 >;
-			label = "Red LED";
+			gpios = < &gpio0 0x3 0x0 >;
+			label = "bleu LED0";
 		};
 	};
 };

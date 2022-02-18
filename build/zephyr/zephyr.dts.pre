@@ -259,9 +259,9 @@
  model = "SiFive ARTY A7 100T";
  compatible = "sifive,artyA7";
  aliases {
-  pwm-led0 = &led0;
-  pwm-led1 = &led1;
-  pwm-led2 = &led2;
+  led0 = &led0;
+  led1 = &led1;
+  led2 = &led2;
  };
 
  chosen {
@@ -272,18 +272,18 @@
  };
 
  leds {
-  compatible = "pwm-leds";
+  compatible = "gpio-leds";
   led0: led_0 {
-   pwms = <&pwm1 1 0>;
-   label = "Green LED";
+   gpios = <&gpio0 19 0>;
+   label = "red LED1";
   };
   led1: led_1 {
-   pwms = <&pwm1 2 0>;
-   label = "Blue LED";
+   gpios = <&gpio0 13 0>;
+   label = "Blue LED 2";
   };
   led2: led_2 {
-   pwms = <&pwm1 3 0>;
-   label = "Red LED";
+   gpios = <&gpio0 3 0>;
+   label = "bleu LED0";
   };
  };
 };
